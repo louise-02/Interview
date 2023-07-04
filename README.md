@@ -1,9 +1,11 @@
-标题
-
-### 标题
-### 标题
+# 一级标题
+### 二级标题
 
 
 ```
-这里输入代码
+    BomManageReplaceExceptionEnum(int code, String message) {
+        this.code = code;
+        this.message = message;
+    }
 ```
+
