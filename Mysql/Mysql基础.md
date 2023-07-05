@@ -12,7 +12,7 @@
 
    数据不能存在传递关系，即每个属性都跟主键有直接关系，而不是间接关系。
 
-​	   例如：考虑一个订单表【Order】（OrderId，OrderDate，CustomerID，CustomerName，CustomerAddr，CustomerCity）主键是（OrderID）。 CustomerName，CustomerAddr，CustomerCity 直接依赖的是 CustomerID，而不是直接依赖于主键，它是通过传递才依赖于主键，所以不符合 3NF。
+例如：考虑一个订单表【Order】（OrderId，OrderDate，CustomerID，CustomerName，CustomerAddr，CustomerCity）主键是（OrderID）。 CustomerName，CustomerAddr，CustomerCity 直接依赖的是 CustomerID，而不是直接依赖于主键，它是通过传递才依赖于主键，所以不符合 3NF。
 
 # SQL几种连接（待补充）
 
@@ -88,28 +88,28 @@ where 查询条件
 
 # Mysql的存储引擎有哪些？
 
-​	MyISAM、InnoDB、BDB(Berkeley DB)、MEMORY(Heap)、MERGE、EXAMPLE、NDB CIuster、 ARCHIVE、CSV、BLACKHOLE、FEDERATED。
+MyISAM、InnoDB、BDB(Berkeley DB)、MEMORY(Heap)、MERGE、EXAMPLE、NDB CIuster、 ARCHIVE、CSV、BLACKHOLE、FEDERATED。
 
-​	InnoDB和BDB提供事务安全表，其他存储引擎都是非事务安全表。
+InnoDB和BDB提供事务安全表，其他存储引擎都是非事务安全表。
 
 # 常用的存储引擎介绍（待补充）
 
 - **Myisam**
 
-​	如果应用是以读写操作和插入操作为主，只有很少的更新和删除操作，并且对事务的完整性、并发性要求不是很高，那么可选用此种存储引擎。
+如果应用是以读写操作和插入操作为主，只有很少的更新和删除操作，并且对事务的完整性、并发性要求不是很高，那么可选用此种存储引擎。
 
-​	每个Myisam在磁盘上存储成三个文件。文件名都和表名相同，扩展名分别为**.frm（存储表定义）**、**.MYD（MYData，存储数据）**、**.MYI（MYIndex，存储索引）**。
+每个Myisam在磁盘上存储成三个文件。文件名都和表名相同，扩展名分别为**.frm（存储表定义）**、**.MYD（MYData，存储数据）**、**.MYI（MYIndex，存储索引）**。
 
 - **InnoDB**
 
-​	用于事务处理应用程序，支持外键。如果应用对事务的完整性有比较高的要求，在并发条件下要求数据一致性，数据操作除了插入和查询以外，还包括很多的更新删除操作，则InnoDB比较合适。InnoDB存储引擎除了能有效地降低由于删除和更新操作导致的锁定，还可以确保事务的完整提交和回滚。
+用于事务处理应用程序，支持外键。如果应用对事务的完整性有比较高的要求，在并发条件下要求数据一致性，数据操作除了插入和查询以外，还包括很多的更新删除操作，则InnoDB比较合适。InnoDB存储引擎除了能有效地降低由于删除和更新操作导致的锁定，还可以确保事务的完整提交和回滚。
 
-​	表结构放在**frm文件**，数据和索引放在**IBD文件**。
+表结构放在**frm文件**，数据和索引放在**IBD文件**。
 
 - **Memory(Heap)**
 
-​	MEMORY存储引擎将表中的数据存储到内存中，未查询和引用其他表数据提供快速访问。每一个表实际上和一个磁盘文件关联，文件是frm。
+MEMORY存储引擎将表中的数据存储到内存中，未查询和引用其他表数据提供快速访问。每一个表实际上和一个磁盘文件关联，文件是frm。
 
 - **Merge**
 
-​	用于将一系列等同的MyISAM表以逻辑方式组合在一起，并作为一个对象引用它们。Merge表的优点在于可以突破对单个MyISAM表大小的限制，并且将不同的表分布在多个磁盘上，可以有效地改善Merge表的访问效率。
+用于将一系列等同的MyISAM表以逻辑方式组合在一起，并作为一个对象引用它们。Merge表的优点在于可以突破对单个MyISAM表大小的限制，并且将不同的表分布在多个磁盘上，可以有效地改善Merge表的访问效率。
