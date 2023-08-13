@@ -197,6 +197,10 @@ git merge [branch]
 ```
 # 选择一个commit，合并进当前分支
 git cherry-pick [commit]
+
+# 选择多个commit，合并进当前分支
+
+git cherry-pick [commit1]...[commit3]
 ```
 
 # 查看信息
