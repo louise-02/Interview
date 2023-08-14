@@ -348,9 +348,6 @@ git remote remove [remote]
 ```
 # 取回远程仓库的变化，并与本地分支合并
 git pull [remote] [branch]
-
-# 上传本地指定分支到远程仓库
-git push [remote] [branch]
 ```
 
 ## git push
@@ -361,6 +358,9 @@ git push [remote] [branch]
 
 # 强行推送当前分支到远程仓库，即使有冲突
 git push [remote] --force
+
+# 推送代码并于远程分支建立关联
+git push --set-upstream [remote] [branch]
 
 # 推送所有分支到远程仓库
 git push [remote] --all
@@ -464,6 +464,31 @@ git stash pop
 # git pull 和 git fetch 有什么区别
 
 git pull 命令从中央存储库中提取特定分支的新更改或提交，并更新本地存储库中的目标分支。
+
+git fetch 也用于相同的目的，但它的工作方式略有不同。当你执行 git fetch 时，它会从所需的分支中提取所有新提交，并将其存储在本地存储库中的新分支中。如果要在目标分支中反映这些更改，必须在 git fetch 之后执行 git merge 。只有在对目标分支和获取的分支进行合并后才会更新目标分支。
+
+`git pull = git fetch + git merge`
+
+# Git简易操作
+
+```
+创建文件夹并进入目录
+
+# 初始化
+git init
+# 建立远程仓库
+git remote add origin <url>
+# 拉取远程master到本地
+git pull origin master
+
+修改文件
+# 提交工作区代码到暂存区
+git add .
+# 提交暂存区代码到版本库
+git commit -m 'message'
+# 推送到远程 首次push需要加--set-upstream 与远程master分支建立关联
+git push --set-upstream origin master
+```
 
 # Git和SVN有什么区别？
 
