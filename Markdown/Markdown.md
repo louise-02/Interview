@@ -146,12 +146,11 @@ _ _ _
 [跳转到标题标题](#标题)
 
 **方法2 HTML语法**
+此方法在gitee中测试没有解析id，在idea和其他网站中可以解析到
 
 1. 创建锚点
 
    `<span id="jump1">jump1</span>`
-
-   `<a id="jump2">jump1</a>`
 
 2. 跳转
 
@@ -159,8 +158,6 @@ _ _ _
 
    [jump1](#jump1)
 
-   [jump2](#jump2)
-
 测试
 
 测试
@@ -187,6 +184,4 @@ _ _ _
 
 测试
 
-<span id="user-content-jump1">jump1</span>
-
-<a id="user-content-jjump2">jump1</a>
+<span id="jump1">jump1</span>
