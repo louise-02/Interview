@@ -1,14 +1,118 @@
 # Redis是什么？
 
-[Redis](https://redis.io/)是一个基于 C 语言开发的开源数据库（BSD 许可），与传统数据库不同的是 Redis 的数据是存在**内存**中的（内存数据库），读写速度非常快，被广泛应用于缓存方向。并且，Redis 存储的是 KV 键值对数据。
+[Redis](https://redis.io/)是一个基于 C 语言开发的开源数据库（遵守BSD协议），数据存储在**内存**中（内存数据库），读写速度非常快，被广泛应用于缓存方向。并且，Redis 存储的是 **KV 键值对数据**。
 
-为了满足不同的业务场景，Redis 内置了多种数据类型实现（比如 String、Hash、Sorted Set、Bitmap、HyperLogLog、GEO）。并且，Redis 还支持事务、持久化、Lua 脚本、多种开箱即用的集群方案（Redis Sentinel、Redis Cluster）。
+为了满足不同的业务场景，Redis 内置了多种数据类型实现（比如 **String、List、Hash、Set、Sorted Set、Bitmap、HyperLogLog、GEO**）。
+
+它内置了**复制（Replication）**、**LUA 脚本（Lua scripting）**、**LRU 缓存淘汰（LRU eviction）**、**事务（Transactions）**、**发布/订阅**、**流技术**和不同级别的**磁盘持久化（persistence）**功能。
+
+并提供了**主从模式**、 **Redis Sentinel（哨兵）**和 **Redis Cluster（集群）**保证缓存的高可用性（High availability）。
+
+[英文官网 https://redis.io/](https://redis.io/)
+
+[中文网站 https://redis.com.cn/documentation.html](https://redis.com.cn/documentation.html)
+
+[官网下载地址 https://redis.io/download/](https://redis.io/download/)
+
+[源码地址 https://github.com/redis/redis](https://github.com/redis/redis)
+
+[在线测试 https://try.redis.io/](https://try.redis.io/)
+
+[命令参考 http://doc.redisfans.com/](http://doc.redisfans.com/)
+
+# Redis能干嘛？
+
+## Redis用途
+
+1. 分布式缓存，挡在mysql之前的带刀护卫。
+2. 内存存储和持久化（RDB+AOF），redis支持异步将内存中的数据写到硬盘上，同时不影响继续服务
+3. 高可用架构（单机、主从、哨兵、集群）
+4. 缓存穿透、击穿、雪崩
+5. 分布式锁
+6. 队列
+7. 排行榜+点赞
+8. 。。。。。。
+
+## Redis优势
+
+1. 性能极高，redis读取速度110000次/秒，写的速度81000次/秒
+2. redis数据类型丰富，不仅仅支持简单的key-value类型的数据，同时还提供list、set、zset、hash等数据结构
+3. redis支持数据的持久化，可以将内存的数据持久化到磁盘中，重启的时候再次加载使用
+4. redis支持数据的备份，即master-slave模式的数据备份
+
+# Redis迭代演化
+
+![image-20231219220527144](pictures/image-20231219220527144.png)
+
+[历史版本源码 https://download.redis.io/releases/](https://download.redis.io/releases/) 版本号如果第二位是奇数，则为非稳定版本如2.7、2.9
+
+[历史版本新特性 https://github.com/redis/redis/releases](https://github.com/redis/redis/releases)
+
+## Redis7.0新特性todo
+
+
+
+# Redis安装与卸载
+
+**Redis安装**
+
+```
+1、下载redis到/opt目录下
+cd /opt
+wget https://download.redis.io/releases/redis-7.0.0.tar.gz
+
+2、解压
+tar -zxvf redis-7.0.0.tar.gz
+
+3、进入目录
+cd redis-7.0.0
+
+4、执行make命令
+make && make install
+
+5、查看默认安装目录 /usr/local/bin  /usr/local类似于windows系统中的C:\Program Files
+redis-benchmark：性能测试工具
+redis-check-aof：修复有问题的AOF文件
+redis-check-dump：修复有问题的dump.rdb文件
+redis-cli：客户端
+redis-sentinel：redis集群使用
+redis-server：redis服务启动命令
+
+6、修改redis.conf配置文件
+vim /opt/redis-7.0.0/redis.conf
+默认daemonize no      改为  daemonize yes  通过后台启动
+默认protected-mode  yes      改为  protected-mode no  安全模式，开启外部无法连接
+默认bind 127.0.0.1      改为  直接注释掉或改成本机IP地址，否则影响远程IP连接
+添加redis密码      改为 requirepass 你自己设置的密码
+
+7、启动服务
+cd /usr/local/bin
+redis-server /opt/redis-7.0.0/redis.conf
+
+8、连接服务
+redis-cli -a password
+
+9、关闭服务
+redis-cli -a password shutdown
+```
+
+**Redis卸载**
+
+```
+1、关闭服务
+redis-cli -a password shutdown
+
+2、删除/usr/local/lib下关于redis的文件
+ls -l /usr/local/bin/redis-*
+rm -rf /usr/local/bin/redis-*
+```
 
 # Redis 为什么这么快？
 
 1. Redis 基于内存，内存的访问速度是磁盘的上千倍。
-2. Redis 基于 Reactor 模式设计开发了一套高效的事件处理模型，主要是单线程事件循环和 IO 多路复用。
+2. Redis 基于 Reactor 模式设计开发了一套高效的事件处理模型，主要是**单线程事件循环**(单线程的话就能避免多线程的频繁上下文切换问题)和 **非阻塞的IO多路复用**。
 3. Redis 内置了多种优化过后的数据结构实现，性能非常高。
+4. Redis 是用C语言实现的
 
 ![why-redis-so-fast](pictures/why-redis-so-fast-d3507ae8.png)
 
@@ -27,6 +131,8 @@
 由此可见，直接操作缓存能够承受的数据库请求数量是远远大于直接访问数据库的，所以我们可以考虑把数据库中的部分数据转移到缓存中去，这样用户的一部分请求会直接到缓存这里而不用经过数据库。进而，我们也就提高了系统整体的并发。
 
 # 基本数据结构
+
+[Redis 数据类型](https://redis.io/docs/data-types/)
 
 Redis 共有 5 种基本数据结构：String（字符串）、List（列表）、Set（集合）、Hash（散列）、Zset（有序集合）。
 
@@ -247,7 +353,7 @@ https://redis.io/commands/?group=sorted-set
 
 除了 5 种基本的数据结构之外，Redis 还支持 3 种特殊的数据结构：Bitmap、HyperLogLog、GEO。
 
-## Bitmap
+## Bitmap（位图）
 
 Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需要一个 bit 位来表示某个元素对应的值或者状态，key 就是对应元素本身 。我们知道 8 个 bit 可以组成一个 byte，所以 Bitmap 本身会极大的节省储存空间。
 
@@ -288,7 +394,7 @@ Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需
 - 举例：用户签到情况、活跃用户情况、用户行为统计（比如是否点赞过某个视频）。
 - 相关命令：`SETBIT`、`GETBIT`、`BITCOUNT`、`BITOP`。
 
-## HyperLogLog
+## HyperLogLog（基数统计）
 
 HyperLogLog 是一种有名的基数计数概率算法 ，基于 LogLog Counting(LLC)优化改进得来，并不是 Redis 特有的，Redis 只是实现了这个算法并提供了一些开箱即用的 API。
 
@@ -341,7 +447,7 @@ HyperLogLog 的使用非常简单，但原理非常复杂。HyperLogLog 的原�
 - 举例：热门网站每日/每周/每月访问 ip 数统计、热门帖子 uv 统计、
 - 相关命令：`PFADD`、`PFCOUNT` 。
 
-## Geospatial index
+## Geospatial（地理位置）
 
 Geospatial index（地理空间索引，简称 GEO） 主要用于存储地理位置信息，基于 Sorted Set 实现。
 
@@ -420,16 +526,21 @@ user2
 
 # 通用命令
 
-| 命令         | 介绍                             |
-| ------------ | -------------------------------- |
-| DEL key      | 删除指定key                      |
-| KEYS *       | 查询当去数据库下所有的key        |
-| TYPE key     | 查看指定key的类型                |
-| EXISTS key   | 查看指定key是否存在当前数据库中  |
-| SELECT index | 选中数据库                       |
-| FLUSHDB      | 清除当前数据库中所有的内容       |
-| FLUSHALL     | 清除当前实例中所有数据库中的内容 |
-| TTL key      | 查看指定key剩余存活时间          |
+| 命令                   | 介绍                                  |
+| ---------------------- | ------------------------------------- |
+| DEL key                | 删除指定key                           |
+| KEYS *                 | 查询当去数据库下所有的key             |
+| TYPE key               | 查看指定key的类型                     |
+| EXISTS key             | 查看指定key是否存在当前数据库中       |
+| SELECT dbindex[0-15]   | 选中数据库，默认为0                   |
+| FLUSHDB                | 清除当前数据库中所有的内容            |
+| FLUSHALL               | 清除当前实例中所有数据库中的内容      |
+| TTL key                | 查看指定key多少秒过期，-1表示永不过期 |
+| EXPIRE key seconds     | 给指定key设置过期时间                 |
+| MOVE key dbindex[0-15] | 将当前数据库的key移动到指定数据库     |
+| DBSIZE                 | 查看当前数据库key的数量               |
+
+
 
 # String 还是 Hash 存储对象数据更好呢？
 
