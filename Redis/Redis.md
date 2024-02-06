@@ -57,6 +57,12 @@
 **Redis安装**
 
 ```
+0、gcc编译环境确认
+gcc是linux下的一个编译程序，是C程序的编译工具。
+查看gcc版本 gcc -v
+安装gcc yum -y install gcc-c++
+
+
 1、下载redis到/opt目录下
 cd /opt
 wget https://download.redis.io/releases/redis-7.0.0.tar.gz
@@ -92,7 +98,11 @@ redis-server /opt/redis-7.0.0/redis.conf
 8、连接服务
 redis-cli -a password
 
-9、关闭服务
+9、校验是否启动成功
+127.0.0.1:6379> ping
+PONG
+
+10、关闭服务
 redis-cli -a password shutdown
 ```
 
@@ -134,6 +144,8 @@ rm -rf /usr/local/bin/redis-*
 
 [Redis 数据类型](https://redis.io/docs/data-types/)
 
+`help @数据类型` 查看帮助
+
 Redis 共有 5 种基本数据结构：String（字符串）、List（列表）、Set（集合）、Hash（散列）、Zset（有序集合）。
 
 这 5 种数据结构是直接提供给用户使用的，是数据的保存形式，其底层实现主要依赖这 8 种数据结构：简单动态字符串（SDS）、LinkedList（双向链表）、Dict（哈希表/字典）、SkipList（跳跃表）、Intset（整数集合）、ZipList（压缩列表）、QuickList（快速列表）。
@@ -153,7 +165,7 @@ Redis 3.2 之前，List 底层实现是 LinkedList 或者 ZipList。 Redis 3.2 �
 
 String 是 Redis 中最简单同时也是最常用的一个数据结构。
 
-String 是一种二进制安全的数据结构，可以用来存储任何类型的数据比如字符串、整数、浮点数、图片（图片的 base64 编码或者解码或者图片的路径）、序列化后的对象。
+String 是一种二进制安全的数据结构，可以用来存储任何类型的数据比如字符串、整数、浮点数、图片（图片的 base64 编码或者解码或者图片的路径）、序列化后的对象。Redis中字符串value最多可以是**512M**。
 
 虽然 Redis 是用 C 语言写的，但是 Redis 并没有使用 C 的字符串表示，而是自己构建了一种 **简单动态字符串**（Simple Dynamic String，**SDS**）。相比于 C 的原生字符串，Redis 的 SDS 不光可以保存文本数据还可以保存二进制数据，并且获取字符串长度复杂度为 O(1)（C 字符串为 O(N)）,除此之外，Redis 的 SDS API 是安全的，不会造成缓冲区溢出。
 
@@ -177,6 +189,21 @@ https://redis.io/commands/?group=string
 | EXISTS key                     | 判断指定 key 是否存在                          |
 | DEL key（通用）                | 删除指定的 key                                 |
 | EXPIRE key seconds（通用）     | 给指定 key 设置过期时间                        |
+
+### 命令详解
+
+**SET**
+
+SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time-seconds | PXAT unix-time-milliseconds | KEEPTTL]
+
+- `EX` *seconds*：设置指定过期时间，单位为秒
+- `PX` *milliseconds*：设置指定过期时间，单位为毫秒
+- `EXAT` *timestamp-seconds*：设置指定unix时间戳作为过期时间，单位为秒 System.currentTimeMillis()/1000
+- `PXAT` timestamp-milliseconds：设置指定unix时间戳作为过期时间，单位为毫秒
+- `NX`：仅在key不存在的情况下设置value
+- `XX`：仅在key存在的情况下设置value
+- `KEEPTTL`：保留设置前指定的生存时间
+- `GET`：返回以 key 存储的旧字符串，如果 key 不存在，返回 nil。如果键上存储的值不是字符串，则返回错误并中止 SET。
 
 ### **应用场景**
 
@@ -272,9 +299,9 @@ https://redis.io/commands/?group=hash
 
 ## Set（集合）
 
-Redis 中的 Set 类型是一种无序集合，集合中的元素没有先后顺序但都唯一，有点类似于 Java 中的 `HashSet` 。当你需要存储一个列表数据，又不希望出现重复数据时，Set 是一个很好的选择，并且 Set 提供了**判断某个元素是否在**一个 Set 集合内的重要接口，这个也是 List 所不能提供的。
+Redis 中的 Set 类型是一种**无序集合**，集合中的元素没有先后顺序但都**唯一**，有点类似于 Java 中的 `HashSet` 。当你需要存储一个列表数据，又不希望出现重复数据时，Set 是一个很好的选择，并且 Set 提供了**判断某个元素是否在**一个 Set 集合内的重要接口，这个也是 List 所不能提供的。Set集合是通过哈希表实现的，所以添加、删除、查找的复杂度都是**O(1)**。
 
-可以基于 Set 轻易实现交集、并集、差集的操作，比如你可以将一个用户所有的关注人存在一个集合中，将其所有粉丝存在一个集合。这样的话，Set 可以非常方便的实现如共同关注、共同粉丝、共同喜好等功能。这个过程也就是求交集的过程。
+可以基于 Set 轻易实现**交集、并集、差集**的操作，比如你可以将一个用户所有的关注人存在一个集合中，将其所有粉丝存在一个集合。这样的话，Set 可以非常方便的实现如共同关注、共同粉丝、共同喜好等功能。这个过程也就是求交集的过程。
 
 ### 常用命令
 
@@ -316,7 +343,7 @@ https://redis.io/commands/?group=set
 
 ## Zset（有序集合）
 
-Sorted Set 类似于 Set，但和 Set 相比，Sorted Set 增加了一个权重参数 `score`，使得集合中的元素能够按 `score` 进行有序排列，还可以通过 `score` 的范围来获取元素的列表。有点像是 Java 中 `HashMap` 和 `TreeSet` 的结合体。
+Sorted Set 类似于 Set，但和 Set 相比，Sorted Set 增加了一个权重参数 `score`，使得集合中的元素能够按 `score` 进行有序排列，还可以通过 `score` 的范围来获取元素的列表。有点像是 Java 中 `HashMap` 和 `TreeSet` 的结合体。Zset集合是通过哈希表实现的，所以添加、删除、查找的复杂度都是**O(1)**。
 
 ### **常用命令**
 
@@ -396,7 +423,7 @@ Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需
 
 ## HyperLogLog（基数统计）
 
-HyperLogLog 是一种有名的基数计数概率算法 ，基于 LogLog Counting(LLC)优化改进得来，并不是 Redis 特有的，Redis 只是实现了这个算法并提供了一些开箱即用的 API。
+HyperLogLog 是一种有名的**基数计数**概率算法 ，基于 LogLog Counting(LLC)优化改进得来，并不是 Redis 特有的，Redis 只是实现了这个算法并提供了一些开箱即用的 API。
 
 Redis 提供的 HyperLogLog 占用空间非常非常小，只需要 12k 的空间就能存储接近`2^64`个不同元素。这是真的厉害，这就是数学的魅力么！并且，Redis 对 HyperLogLog 的存储结构做了优化，采用两种方式计数：
 
@@ -449,7 +476,7 @@ HyperLogLog 的使用非常简单，但原理非常复杂。HyperLogLog 的原�
 
 ## Geospatial（地理位置）
 
-Geospatial index（地理空间索引，简称 GEO） 主要用于存储地理位置信息，基于 Sorted Set 实现。
+Geospatial index（地理空间索引，简称 GEO） 主要用于**存储地理位置信息**，基于 Sorted Set 实现。
 
 通过 GEO 我们可以轻松实现两个位置距离的计算、获取指定位置附近的元素等功能。
 
@@ -526,21 +553,20 @@ user2
 
 # 通用命令
 
-| 命令                   | 介绍                                  |
-| ---------------------- | ------------------------------------- |
-| DEL key                | 删除指定key                           |
-| KEYS *                 | 查询当去数据库下所有的key             |
-| TYPE key               | 查看指定key的类型                     |
-| EXISTS key             | 查看指定key是否存在当前数据库中       |
-| SELECT dbindex[0-15]   | 选中数据库，默认为0                   |
-| FLUSHDB                | 清除当前数据库中所有的内容            |
-| FLUSHALL               | 清除当前实例中所有数据库中的内容      |
-| TTL key                | 查看指定key多少秒过期，-1表示永不过期 |
-| EXPIRE key seconds     | 给指定key设置过期时间                 |
-| MOVE key dbindex[0-15] | 将当前数据库的key移动到指定数据库     |
-| DBSIZE                 | 查看当前数据库key的数量               |
-
-
+| 命令                   | 介绍                                                         |
+| ---------------------- | ------------------------------------------------------------ |
+| KEYS *                 | 查询当去数据库下所有的key                                    |
+| DEL key                | 删除指定key                                                  |
+| UNLINK key             | 非阻塞删除，仅仅将key从keyspace元数据中删除，真正的删除会后续异步操作 |
+| TYPE key               | 查看指定key的类型                                            |
+| EXISTS key             | 查看指定key是否存在当前数据库中                              |
+| TTL key                | 查看指定key多少秒过期，-1表示永不过期                        |
+| EXPIRE key seconds     | 给指定key设置过期时间                                        |
+| MOVE key dbindex[0-15] | 将当前数据库的key移动到指定数据库                            |
+| SELECT dbindex[0-15]   | 选中数据库，默认为0                                          |
+| DBSIZE                 | 查看当前数据库key的数量                                      |
+| FLUSHDB                | 清除当前数据库中所有的内容                                   |
+| FLUSHALL               | 清除当前实例中所有数据库中的内容                             |
 
 # String 还是 Hash 存储对象数据更好呢？
 
