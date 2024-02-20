@@ -173,22 +173,25 @@ String 是一种二进制安全的数据结构，可以用来存储任何类型�
 
 https://redis.io/commands/?group=string
 
-| 命令                           | 介绍                                           |
-| :----------------------------- | :--------------------------------------------- |
-| SET key value                  | 设置指定 key 的值                              |
-| SETNX key value                | 只有在 key 不存在时设置 key 的值               |
-| SETEX key seconds value        | 设置指定 key 的值并设置过期时间                |
-| GET key                        | 获取指定 key 的值                              |
-| MSET key1 value1 key2 value2 … | 设置一个或多个指定 key 的值                    |
-| MGET key1 key2 ...             | 获取一个或多个指定 key 的值                    |
-| STRLEN key                     | 返回 key 所储存的字符串值的长度                |
-| INCR key                       | 将 key 中储存的数字值增一                      |
-| INCRBY key increment           | 将 key 所储存的值加上给定的增量值（increment） |
-| DECR key                       | 将 key 中储存的数字值减一                      |
-| DECRBY key decrement           | key 所储存的值减去给定的减量值（decrement）    |
-| EXISTS key                     | 判断指定 key 是否存在                          |
-| DEL key（通用）                | 删除指定的 key                                 |
-| EXPIRE key seconds（通用）     | 给指定 key 设置过期时间                        |
+| 命令                             | 介绍                                              |
+| :------------------------------- | :------------------------------------------------ |
+| SET key value                    | 设置指定 key 的值                                 |
+| SETNX key value                  | 只有在 key 不存在时设置 key 的值 set if not exist |
+| SETEX key seconds value          | 设置指定 key 的值并设置过期时间 set with expire   |
+| GET key                          | 获取指定 key 的值                                 |
+| MSET key1 value1 key2 value2 …   | 设置一个或多个指定 key 的值                       |
+| MSETNX key1 value1 key2 value2 … | 只有在都不存在时，设置一个或多个指定 key 的值     |
+| MGET key1 key2 ...               | 获取一个或多个指定 key 的值                       |
+| STRLEN key                       | 返回 key 所储存的字符串值的长度                   |
+| APPEND key str                   | 在指定key后追加str                                |
+| INCR key                         | 将 key 中储存的数字值增一                         |
+| INCRBY key increment             | 将 key 所储存的值加上给定的增量值（increment）    |
+| DECR key                         | 将 key 中储存的数字值减一                         |
+| DECRBY key decrement             | key 所储存的值减去给定的减量值（decrement）       |
+| GETSET key value                 | 设置指定 key 的值，并返回之前的值                 |
+| EXISTS key（通用）               | 判断指定 key 是否存在                             |
+| DEL key（通用）                  | 删除指定的 key                                    |
+| EXPIRE key seconds（通用）       | 给指定 key 设置过期时间                           |
 
 ### 命令详解
 
@@ -198,7 +201,7 @@ SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time-sec
 
 - `EX` *seconds*：设置指定过期时间，单位为秒
 - `PX` *milliseconds*：设置指定过期时间，单位为毫秒
-- `EXAT` *timestamp-seconds*：设置指定unix时间戳作为过期时间，单位为秒 System.currentTimeMillis()/1000
+- `EXAT` *timestamp-seconds*：设置指定unix时间戳作为过期时间，单位为秒 `System.currentTimeMillis()/1000`
 - `PXAT` timestamp-milliseconds：设置指定unix时间戳作为过期时间，单位为毫秒
 - `NX`：仅在key不存在的情况下设置value
 - `XX`：仅在key存在的情况下设置value
@@ -223,21 +226,26 @@ SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time-sec
 
 ## List（列表）
 
-Redis 的 List 的实现为一个 **双向链表**，即可以支持反向查找和遍历，更方便操作，不过带来了部分额外的内存开销。
+Redis 的 List 的实现为一个 **双向链表**，容量是**2的32次方-1**，即可以支持反向查找和遍历，更方便操作，不过带来了部分额外的内存开销。
 
 ### **常用命令**
 
 https://redis.io/commands/?group=list
 
-| **命令**                    | **介绍**                                   |
-| :-------------------------- | ------------------------------------------ |
-| RPUSH key value1 value2 ... | 在指定列表的尾部（右边）添加一个或多个元素 |
-| LPUSH key value1 value2 ... | 在指定列表的头部（左边）添加一个或多个元素 |
-| LSET key index value        | 将指定列表索引 index 位置的值设置为 value  |
-| LPOP key                    | 移除并获取指定列表的第一个元素(最左边)     |
-| RPOP key                    | 移除并获取指定列表的最后一个元素(最右边)   |
-| LLEN key                    | 获取列表元素数量                           |
-| LRANGE key start end        | 获取列表 start 和 end 之间 的元素          |
+| **命令**                                   | **介绍**                                        |
+| :----------------------------------------- | ----------------------------------------------- |
+| RPUSH key value1 value2 ...                | 在指定列表的尾部（右边）添加一个或多个元素      |
+| LPUSH key value1 value2 ...                | 在指定列表的头部（左边）添加一个或多个元素      |
+| LSET key index value                       | 将指定列表索引 index 位置的值设置为 value       |
+| LPOP key                                   | 移除并获取指定列表的第一个元素(最左边)          |
+| RPOP key                                   | 移除并获取指定列表的最后一个元素(最右边)        |
+| LINDEX key index                           | 按照索引下标获取元素                            |
+| LLEN key                                   | 获取列表元素数量                                |
+| LRANGE key start end                       | 获取列表 start 和 end 之间 的元素 0到-1代表所有 |
+| LREM key num value                         | 删除指定key中num个value值                       |
+| LTRIM key sindex eindex                    | 截取指定范围key并赋值给该key                    |
+| RPOPLPUSH key1 key2                        | 从key1右端弹出插入到key2左端                    |
+| LINSERT key before/after 已有值 插入的新值 | 在指定key的已有值的前/后插入新值                |
 
 ![img](pictures/redis-list.png)
 
@@ -247,6 +255,8 @@ https://redis.io/commands/?group=list
 
 - 举例：最新文章、最新动态。
 - 相关命令：`LPUSH`、`LRANGE`。
+
+将文章/动态id存入redis，可以利用`LRANGE`进行分页查询
 
 **消息队列**
 
@@ -266,18 +276,21 @@ Hash 类似于 JDK1.8 前的 `HashMap`，内部实现也差不多(数组 + 链�
 
 https://redis.io/commands/?group=hash
 
-| 命令                                      | 介绍                                                     |
-| ----------------------------------------- | -------------------------------------------------------- |
-| HSET key field value                      | 设置指定哈希表中指定字段的值                             |
-| HSETNX key field value                    | 只有指定字段不存在时设置指定字段的值                     |
-| HMSET key field1 value1 field2 value2 ... | 同时将一个或多个 field-value (域-值)对设置到指定哈希表中 |
-| HGET key field                            | 获取指定哈希表中指定字段的值                             |
-| HMGET key field1 field2 ...               | 获取指定哈希表中一个或者多个指定字段的值                 |
-| HGETALL key                               | 获取指定哈希表中所有的键值对                             |
-| HEXISTS key field                         | 查看指定哈希表中指定的字段是否存在                       |
-| HDEL key field1 field2 ...                | 删除一个或多个哈希表字段                                 |
-| HLEN key                                  | 获取指定哈希表中字段的数量                               |
-| HINCRBY key field increment               | 对指定哈希中的指定字段做运算操作（正数为加，负数为减）   |
+| 命令                                      | 介绍                                                         |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| HSET key field value                      | 设置指定哈希表中指定字段的值                                 |
+| HGET key field                            | 获取指定哈希表中指定字段的值                                 |
+| HSETNX key field value                    | 只有指定字段不存在时设置指定字段的值                         |
+| HMSET key field1 value1 field2 value2 ... | 同时将一个或多个 field-value (域-值)对设置到指定哈希表中     |
+| HMGET key field1 field2 ...               | 获取指定哈希表中一个或者多个指定字段的值                     |
+| HGETALL key                               | 获取指定哈希表中所有的键值对                                 |
+| HDEL key field1 field2 ...                | 删除一个或多个哈希表字段                                     |
+| HEXISTS key field                         | 查看指定哈希表中指定的字段是否存在                           |
+| HKEYS key                                 | 获取指定哈希表所有field                                      |
+| HVALS key                                 | 获取指定哈希表所有value                                      |
+| HLEN key                                  | 获取指定哈希表中字段的数量                                   |
+| HINCRBY key field increment               | 对指定哈希中的指定字段做运算操作（正数为加，负数为减）       |
+| HINCRBYFLOAT key field increment          | 对指定哈希中的指定字段做浮点数运算操作（正数为加，负数为减） |
 
 **HINCRBY**
 
@@ -307,21 +320,23 @@ Redis 中的 Set 类型是一种**无序集合**，集合中的元素没有先�
 
 https://redis.io/commands/?group=set
 
-| 命令                                  | 介绍                                      |
-| ------------------------------------- | ----------------------------------------- |
-| SADD key member1 member2 ...          | 向指定集合添加一个或多个元素              |
-| SMEMBERS key                          | 获取指定集合中的所有元素                  |
-| SCARD key                             | 获取指定集合的元素数量                    |
-| SISMEMBER key member                  | 判断指定元素是否在指定集合中              |
-| SINTER key1 key2 ...                  | 获取给定所有集合的交集(我有你也有)        |
-| SINTERSTORE destination key1 key2 ... | 将给定所有集合的交集存储在 destination 中 |
-| SUNION key1 key2 ...                  | 获取给定所有集合的并集(我有加你有)        |
-| SUNIONSTORE destination key1 key2 ... | 将给定所有集合的并集存储在 destination 中 |
-| SDIFF key1 key2 ...                   | 获取给定所有集合的差集(我有你没有)        |
-| SDIFFSTORE destination key1 key2 ...  | 将给定所有集合的差集存储在 destination 中 |
-| SPOP key [count]                      | 随机移除并获取指定集合中一个或多个元素    |
-| SRANDMEMBER key [count]               | 随机获取指定集合中指定数量的元素          |
-| SREM key member1 member2 ...          | 删除指定集合中的元素                      |
+| 命令                                  | 介绍                                         |
+| ------------------------------------- | -------------------------------------------- |
+| SADD key member1 member2 ...          | 向指定集合添加一个或多个元素                 |
+| SMEMBERS key                          | 获取指定集合中的所有元素                     |
+| SISMEMBER key member                  | 判断指定元素是否在指定集合中                 |
+| SCARD key                             | 获取指定集合的元素数量                       |
+| SREM key member1 member2 ...          | 删除指定集合中的元素                         |
+| SPOP key [count]                      | 随机移除并获取指定集合中一个或多个元素，删除 |
+| SRANDMEMBER key [count]               | 随机获取指定集合中指定数量的元素，不删除     |
+| SMOVE key1 key2 k1value               | 将key1中已存在的某个值迁移到key2中           |
+|                                       |                                              |
+| SINTER key1 key2 ...                  | 获取给定所有集合的交集(我有你也有)           |
+| SINTERSTORE destination key1 key2 ... | 将给定所有集合的交集存储在 destination 中    |
+| SUNION key1 key2 ...                  | 获取给定所有集合的并集(我有加你有)           |
+| SUNIONSTORE destination key1 key2 ... | 将给定所有集合的并集存储在 destination 中    |
+| SDIFF key1 key2 ...                   | 获取给定所有集合的差集(我有你没有)           |
+| SDIFFSTORE destination key1 key2 ...  | 将给定所有集合的差集存储在 destination 中    |
 
 ### 应用场景
 
@@ -349,19 +364,38 @@ Sorted Set 类似于 Set，但和 Set 相比，Sorted Set 增加了一个权重�
 
 https://redis.io/commands/?group=sorted-set
 
-| 命令                                          | 介绍                                                         |
-| --------------------------------------------- | ------------------------------------------------------------ |
-| ZADD key score1 member1 score2 member2 ...    | 向指定有序集合添加一个或多个元素                             |
-| ZCARD KEY                                     | 获取指定有序集合的元素数量                                   |
-| ZSCORE key member                             | 获取指定有序集合中指定元素的 score 值                        |
-| ZINTERSTORE destination numkeys key1 key2 ... | 将给定所有有序集合的交集存储在 destination 中，对相同元素对应的 score 值进行 SUM 聚合操作，numkeys 为集合数量 |
-| ZUNIONSTORE destination numkeys key1 key2 ... | 求并集，其它和 ZINTERSTORE 类似                              |
-| ZDIFFSTORE destination numkeys key1 key2 ...  | 求差集，其它和 ZINTERSTORE 类似                              |
-| ZRANGE key start end [WITHSCORES]             | 获取指定有序集合 start 和 end 之间的元素（score 从低到高）   |
-| ZREVRANGE key start end [WITHSCORES]          | 获取指定有序集合 start 和 end 之间的元素（score 从高到底）   |
-| ZREVRANK key member                           | 获取指定有序集合中指定元素的排名(score 从大到小排序)         |
-| ZREM key member1 member2 ...                  | 删除有序集合中的元素                                         |
-| ZRANK key member                              | 返回有序集合中指定成员的索引                                 |
+| 命令                                                        | 介绍                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------ |
+| ZADD key score1 member1 score2 member2 ...                  | 向指定有序集合添加一个或多个元素                             |
+| ZRANGE key start end [WITHSCORES]                           | 获取指定有序集合 start 和 end 之间的元素（score 从低到高）   |
+| ZREVRANGE key start end [WITHSCORES]                        | 获取指定有序集合 start 和 end 之间的元素（score 从高到底）   |
+| ZRANGEBYSCORE key min max [WITHSCORES] [limit offset count] | 获取指定分数范围内的元素，(代表不包含                        |
+| ZCARD KEY                                                   | 获取指定有序集合的元素数量                                   |
+| ZSCORE key member                                           | 获取指定有序集合中指定元素的 score 值                        |
+| ZREM key member1 member2 ...                                | 删除有序集合中的元素                                         |
+| ZINCRBY key increment member                                | 指定key中的member增加分数                                    |
+| ZCOUNT key min max                                          | 获取指定分数范围内的元素个数                                 |
+| ZRANK key member                                            | 获取指定有序集合中指定元素的排名(score 从小到大排序)         |
+| ZREVRANK key member                                         | 获取指定有序集合中指定元素的排名(score 从大到小排序)         |
+|                                                             |                                                              |
+| ZINTERSTORE destination numkeys key1 key2 ...               | 将给定所有有序集合的交集存储在 destination 中，对相同元素对应的 score 值进行 SUM 聚合操作，numkeys 为集合数量 |
+| ZUNIONSTORE destination numkeys key1 key2 ...               | 求并集，其它和 ZINTERSTORE 类似                              |
+| ZDIFFSTORE destination numkeys key1 key2 ...                | 求差集，其它和 ZINTERSTORE 类似                              |
+
+**ZRANGEBYSCORE**
+
+```
+> zadd z 1 a 2 b 3 c
+(integer) 3
+> zrangebyscore z 1 3
+a b c
+> zrangebyscore z 1 (3
+a b
+> zrangebyscore z (1 3
+b c
+> zrangebyscore z 1 3 limit 1 1
+b
+```
 
 ### 应用场景
 
@@ -382,7 +416,7 @@ https://redis.io/commands/?group=sorted-set
 
 ## Bitmap（位图）
 
-Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需要一个 bit 位来表示某个元素对应的值或者状态，key 就是对应元素本身 。我们知道 8 个 bit 可以组成一个 byte，所以 Bitmap 本身会极大的节省储存空间。
+Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需要一个 bit 位来表示某个元素对应的值或者状态，key 就是对应元素本身 。我们知道 8 个 bit 可以组成一个 byte，所以 Bitmap 本身会极大的节省储存空间。**用String类型作为底层数据结构实现的一种统计二值状态的数据结构，位图的本质是数组**，最大支持位数是**2的32次方**位，使用512M内存就可以存储多大42.9亿的字节信息
 
 可以将 Bitmap 看作是一个存储二进制数字（0 和 1）的数组，数组中每个元素的下标叫做 offset（偏移量）。
 
@@ -394,8 +428,9 @@ Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需
 | ------------------------------------- | ------------------------------------------------------------ |
 | SETBIT key offset value               | 设置指定 offset 位置的值                                     |
 | GETBIT key offset                     | 获取指定 offset 位置的值                                     |
+| STRLEN key                            | 获取指定 key 占用的字节数                                    |
 | BITCOUNT key start end                | 获取 start 和 end 之前值为 1 的元素个数                      |
-| BITOP operation destkey key1 key2 ... | 对一个或多个 Bitmap 进行运算，可用运算符有 AND, OR, XOR 以及 NOT |
+| BITOP operation destkey key1 key2 ... | 对一个或多个 Bitmap 进行运算，可用运算符operation有 AND, OR, XOR 以及 NOT，destkey为输出的key |
 
 **基础操作**
 
@@ -418,7 +453,7 @@ Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需
 
 **需要保存状态信息（0/1 即可表示）的场景**
 
-- 举例：用户签到情况、活跃用户情况、用户行为统计（比如是否点赞过某个视频）。
+- 举例：用户签到情况、活跃用户情况、用户行为统计（比如是否点赞过某个视频）。记录用户一年的签到情况。
 - 相关命令：`SETBIT`、`GETBIT`、`BITCOUNT`、`BITOP`。
 
 ## HyperLogLog（基数统计）
