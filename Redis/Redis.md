@@ -96,7 +96,8 @@ cd /usr/local/bin
 redis-server /opt/redis-7.0.0/redis.conf
 
 8、连接服务
-redis-cli -a password
+redis-cli -a password 或 redis-cli 登录后 auth password
+如果出现中文乱码可以使用 redis-cli --raw
 
 9、校验是否启动成功
 127.0.0.1:6379> ping
@@ -460,7 +461,7 @@ Bitmap 存储的是连续的二进制数字（0 和 1），通过 Bitmap, 只需
 
 HyperLogLog 是一种有名的**基数计数**概率算法 ，基于 LogLog Counting(LLC)优化改进得来，并不是 Redis 特有的，Redis 只是实现了这个算法并提供了一些开箱即用的 API。
 
-Redis 提供的 HyperLogLog 占用空间非常非常小，只需要 12k 的空间就能存储接近`2^64`个不同元素。这是真的厉害，这就是数学的魅力么！并且，Redis 对 HyperLogLog 的存储结构做了优化，采用两种方式计数：
+Redis 提供的 HyperLogLog 占用空间非常非常小，只需要 12k 的空间就能存储接近`2^64`个不同元素。并且，Redis 对 HyperLogLog 的存储结构做了优化，采用两种方式计数：
 
 - **稀疏矩阵**：计数较少的时候，占用空间很小。
 - **稠密矩阵**：计数达到某个阈值的时候，占用 12k 的空间。
@@ -506,7 +507,7 @@ HyperLogLog 的使用非常简单，但原理非常复杂。HyperLogLog 的原�
 
 **数量量巨大（百万、千万级别以上）的计数场景**
 
-- 举例：热门网站每日/每周/每月访问 ip 数统计、热门帖子 uv 统计、
+- 举例：热门网站每日/每周/每月访问 ip 数统计、热门帖子 uv（独立访客） 统计、
 - 相关命令：`PFADD`、`PFCOUNT` 。
 
 ## Geospatial（地理位置）
@@ -519,13 +520,14 @@ Geospatial index（地理空间索引，简称 GEO） 主要用于**存储地理
 
 ### **常用命令**
 
-| 命令                                             | 介绍                                                         |
-| ------------------------------------------------ | ------------------------------------------------------------ |
-| GEOADD key longitude1 latitude1 member1 ...      | 添加一个或多个元素对应的经纬度信息到 GEO 中                  |
-| GEOPOS key member1 member2 ...                   | 返回给定元素的经纬度信息                                     |
-| GEODIST key member1 member2 M/KM/FT/MI           | 返回两个给定元素之间的距离                                   |
-| GEORADIUS key longitude latitude radius distance | 获取指定位置附近 distance 范围内的其他元素，支持 ASC(由近到远)、DESC（由远到近）、Count(数量) 等参数 |
-| GEORADIUSBYMEMBER key member radius distance     | 类似于 GEORADIUS 命令，只是参照的中心点是 GEO 中的元素       |
+| 命令                                            | 介绍                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| GEOADD key longitude1 latitude1 member1 ...     | 添加一个或多个元素对应的经纬度信息到 GEO 中                  |
+| GEOPOS key member1 member2 ...                  | 返回给定元素的经纬度信息                                     |
+| GEOHASH key member1 member2 ...                 | geohash算法生成的base32编码值                                |
+| GEODIST key member1 member2 M/KM/FT/MI          | 返回两个给定元素之间的距离                                   |
+| GEORADIUS key longitude latitude 半径M/KM/FT/MI | 获取指定位置附近 distance 范围内的其他元素，支持 ASC(由近到远)、DESC（由远到近）、Count(数量) 等参数 |
+| GEORADIUSBYMEMBER key member 半径 M/KM/FT/MI    | 类似于 GEORADIUS 命令，只是参照的中心点是 GEO 中的元素       |
 
 **基础操作**
 
@@ -544,6 +546,22 @@ GEO 中存储的地理位置信息的经纬度数据通过 GeoHash 算法转换�
 ![img](pictures/image-20220721201545147.png)
 
 **获取指定位置范围内的其他元素**：
+
+GEORADIUS
+
+```
+GEORADIUS key longitude latitude radius <M | KM | FT | MI>
+  [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count [ANY]] [ASC | DESC]
+  [STORE key | STOREDIST key]
+  
+radius：半径
+WITHDIST：在返回位置元素的同时， 将位置元素与中心之间的距离也一并返回。 距离的单位和用户给定的范围单位保持一致。
+WITHCOORD：将位置元素的经度和维度也一并返回。
+WITHHASH：以 52 位有符号整数的形式， 返回位置元素经过原始 geohash 编码的有序集合分值。 这个选项主要用于底层应用或者调试， 实际中的作用并不大
+COUNT：限定返回的记录数
+STORE key：将返回结果的地理位置信息保存到指定 key，以Geo数据类型
+STOREDIST key：将返回结果离中心点的距离保存到指定 Key，以Zseto数据类型
+```
 
 ```
 > GEORADIUS personLocation 116.33 39.87 3 km
@@ -586,6 +604,224 @@ user2
 - 举例：附近的人。
 - 相关命令: `GEOADD`、`GEORADIUS`、`GEORADIUSBYMEMBER` 。
 
+## Stream（消息队列）
+
+Redis在5.0版本后推出的类似Mq的消息队列，在5.0版本之前可以用List来实现点对点、用发布订阅来实现广播模式，但是发布订阅无法持久化。Stream是用来实现**消息队列**，它**支持消息的持久化、支持自动生成全局唯一ID、支持ACK确认消息的模式、支持消费组模式**等，让消息队列更加可靠。
+
+![image-20240225114621902](pictures/image-20240225114621902.png)
+
+- Message Content：消息内容
+- Consumer group： 消费组，通过XGROUP CREATE 命令创建，同一个消费组可以有多个消费者
+-  Last_delivered_id：游标，每个消费组会有个游标 last_delivered_id，任意一个消费者读取了消息都会使游标 last_delivered_id 往前移动。
+-  Consumer：消费者，消费组中的消费者
+-  Pending_ids：消费者会有一个状态变量，用于记录被当前消费已读取但未ack的消息Id，如果客户端没有ack，这个变量里面的消息ID会越来越多，一旦某个消息被ack它就开始减少。这个pending_ids变量在Redis官方被称之为 PEL(Pending Entries List)，记录了当前已经被客户端读取的消息，但是还没有 ack (Acknowledge character：确认字符），它用来确保客户端至少消费了消息一次，而不会在网络传输的中途丢失了没处理
+
+### 常用命令
+
+**一些特殊符号**
+
+- `-`：最小可能出现的ID
+- `+`：最大可能出现的ID
+- `$`：当前流中最大的ID
+- `>`：用于XREADGROUP，表示迄今还没有发送给组内使用者的信息，会更新消费组的最后ID
+- `*`：用于XADD，让系统自动生成ID
+
+**生产者**
+
+| 命令                                                         | 介绍                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| XADD key id\|* field1 value1 field2 value2...                | 向队列中添加消息，*表示自动生成自增 MessageID，后续ID不能小于前一个ID。返回值为millisecondsTime-自增id |
+| XRANGE key start end [COUNT count]                           | 用于获取消息队列，start -代表最小值，end +代表最大值         |
+| XREVRANGE key end start [COUNT count]                        | 与XRANGE获取元素的方向相反                                   |
+| XDEL key ID [ID ...]                                         | 删除指定消息队列中的元素                                     |
+| XLEN key                                                     | 获取指定消息队列的元素个数                                   |
+| XTRIM key MAXLEN\|MINID count\|id                            | 截取指定消息队列，MAXLEN指最大数量，MINID指最小id            |
+| XREAD [COUNT count] [BLOCK milliseconds] STREAMS key [key ...] ID [ID ...] | 用于获取消息队列，只返回大于指定ID的消息。ID可以为$代表特殊ID，表示以当前队列中最大ID。ID也可为0/00/000，代表获取全部信息。BLOCK可以为0表示读取到为止 |
+
+**生产者基础操作**
+
+```
+> xadd s *  k1 v1 m1 n1
+1708834869189-0
+> xadd s *  k2 v2 m2 n2
+1708834875959-0
+> xrange s - +
+1708834869189-0
+k1
+v1
+m1
+n1
+1708834875959-0
+k2
+v2
+m2
+n2
+> xadd s *  k3 v3 m3 n3
+1708834914335-0
+> xtrim s maxlen 2
+1
+> xrange s  - +
+1708834875959-0
+k2
+v2
+m2
+n2
+1708834914335-0
+k3
+v3
+m3
+n3
+> xtrim s minid 1708834914335
+1
+> xrange s  - +
+1708834914335-0
+k3
+v3
+m3
+n3
+> XREAD STREAMS s 0
+s
+1708834914335-0
+k3
+v3
+m3
+n3
+```
+
+**消费者**
+
+| 命令                                                         | 介绍                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| XGROUP CREATE key groupname id-or-$                          | 用于创建消费组，$表示从Stream尾部开始消费，0表示从Stream头部开始消费 |
+| XREADGROUP GROUP groupname consumer [COUNT count] [BLOCK milliseconds] [NOACK] STREAMS key [key ...] ID [ID ...] | 消费组指定消费者进行消费。ID可以为>，表示从第一条尚未被消费的消息开始读取 |
+| XPENDING key group [start end count] [consumer]              | 1.查询每个消费组内所有消费者[已读取但尚未确认]的消息2.查询某个消费者具体消费了哪些数据 |
+| XACK key group ID                                            | 向消息队列确认消息处理完成                                   |
+
+**基于 Stream 实现的消息队列，如何保证消费者在发生故障或宕机再次重启后，仍然可以读取未处理完的消息？**
+
+- Streams 会自动使用内部队列（也称为 PENDING List）留存消费组里每个消费者读取的消息保底措施，直到消费者使用 XACK 命令通知 Streams“消息已经处理完成”。
+- 消费确认增加了消息的可靠性，一般在业务处理完成之后，需要执行 XACK 命令确认消息已经被消费完成
+
+**消费组基础操作**
+
+```
+> XGROUP CREATE s g1 0
+OK
+> XREADGROUP GROUP g1 c1 STREAMS s >
+s
+1708834914335-0
+k3
+v3
+m3
+n3
+1708836178358-0
+k1
+v1
+1708836183725-0
+k1
+v1
+m1
+n2
+
+> XREADGROUP GROUP g1 c1 STREAMS s >
+null
+> XREADGROUP GROUP g1 c2 STREAMS s >
+null
+
+> XREADGROUP GROUP g2 c1 STREAMS s >
+NOGROUP No such key 's' or consumer group 'g2' in XREADGROUP with GROUP option
+
+> XPENDING s g1
+3
+1708834914335-0 所有消费组读取的最小ID
+1708836183725-0 所有消费组读取的最大ID
+c1
+3
+
+> xpending s g1 - + 10 c1
+1708834914335-0
+c1
+760156
+1
+1708836178358-0
+c1
+760156
+1
+1708836183725-0
+c1
+760156
+1
+
+> XACK s g1 1708834914335
+1
+
+> xpending s g1 - + 10 c1
+1708836178358-0
+c1
+883091
+1
+1708836183725-0
+c1
+883091
+1
+
+> XPENDING s g1
+2
+1708836178358-0
+1708836183725-0
+c1
+2
+```
+
+## **Bitfield（位域）**
+
+将一个Redis字符串看作是一个由**二进制位组成的数组**并能对变长位宽和任意没有字节对齐的指定整型位域进行**寻址和修改**。可以对字符串进行位域修改和溢出控制
+
+### 常用命令
+
+| 命令                                                         | 介绍                          |
+| ------------------------------------------------------------ | ----------------------------- |
+| BITFIELD key [GET type offset] [OVERFLOW WRAP\|SAT\|FAIL]    | 对指定key的位域进行访问       |
+| BITFIELD key [SET type offset value] [OVERFLOW WRAP\|SAT\|FAIL] | 对指定key的位域进行修改       |
+| BITFIELD key [INCRBY type offset increment] [OVERFLOW WRAP\|SAT\|FAIL] | 对指定key的位域进行自增或自减 |
+
+**type**
+
+有符号的整型在位数前加i，无符号的在位数前加u。例如，i8是8位有符号整型，u16是16位无符号整型
+
+**OVERFLOW 溢出控制** 
+
+- WRAP：使用回绕（wrap around），有符号超过最大值从负数开始，无符号超过最大值从0开始
+- SAT：使用饱和计算（saturation arithmetic）方法处理溢出，下溢计算的结果为最小的整数值，上溢计算的结果为最大的整数值
+- FAIL：命令将拒绝执行那些会导致上溢或者下溢情况出现的计算，并向用户返回空值表示计算未被执行
+
+**基础操作**
+
+```
+> set k hello
+OK
+> BITFIELD k get i8 0
+104
+> BITFIELD k get i8 8
+101
+> BITFIELD k get i8 16
+108
+> BITFIELD k get i8 24
+108
+> BITFIELD k get i8 32
+111
+> BITFIELD k set i8 8 120
+101
+> get k
+hxllo
+> BITFIELD k incrby i8 32 1
+112
+> get k
+hxllp
+```
+
+
+
 # 通用命令
 
 | 命令                   | 介绍                                                         |
@@ -602,6 +838,125 @@ user2
 | DBSIZE                 | 查看当前数据库key的数量                                      |
 | FLUSHDB                | 清除当前数据库中所有的内容                                   |
 | FLUSHALL               | 清除当前实例中所有数据库中的内容                             |
+
+# Redis持久化
+
+[Redis持久化 https://redis.io/docs/manual/persistence/](https://redis.io/docs/manual/persistence/)
+
+![image-20240225165913467](pictures/image-20240225165913467.png)
+
+## RDB
+
+RDB 持久性以**指定的时间间隔**执行数据集的时间点**快照**。Redis的数据都在内存中，保存备份时它执行的是**全量快照**，这个快照文件就称为RDB文件(dump.rdb)，其中，RDB就是Redis DataBase的缩写。
+
+`vim /opt/redis-7.0.0/redis.conf`
+
+**修改保存间隔**
+
+![image-20240227221311910](pictures/image-20240227221311910.png)
+
+save 60 3：每隔30秒，如果有三个key发生变化，就写一份新的RDB文件
+
+**修改dump文件路径**
+
+![image-20240227221409868](pictures/image-20240227221409868.png)
+
+**修改dump文件名称**
+
+![image-20240227220913070](pictures/image-20240227220913070.png)
+
+**重启服务**
+
+`redis-cli -a password shutdown`
+
+`redis-server /opt/redis-7.0.0/redis.conf`
+
+**恢复数据**
+
+```
+//模拟宕机
+cd /opt/redisDump
+mv myRedis.rdb myRedis.rdb.1
+ps -ef | grep redis
+kill -9 xxx
+//此时重启服务后数据为空
+redis-server /opt/redis-7.0.0/redis.conf
+redis-cli -a password shutdown
+mv myRedis.rdb.1 myRedis.rdb
+//此时数据全部恢复
+redis-server /opt/redis-7.0.0/redis.conf
+```
+
+**手动触发RDB**
+
+`save`：在主程序中执⾏会阻塞当前redis服务器，直到持久化工作完成，执行save命令期间，Redis不能处理其他命令，**线上禁止使用**。
+
+`bgsave`：Redis会在**后台异步进行快照**操作，不阻塞，快照同时还可以响应客户端请求,该触发方式会fork一个子进程由子进程复制持久化过程。
+
+`LASTSAVE`：可以通过lastsave命令获取最后一次成功执行快照的时间戳，linux中执行`date -d @时间戳`可查看时间
+
+**如何检查恢复dump.rdb文件**
+
+`cd /usr/local/bin`
+
+`redis-check-rdb /opt/redisDump/myRedis.rdb`
+
+**何时会触发RDB快照**
+
+- 配置文件中默认的快照配置
+- 手动save/bgsave命令
+- 执行flushall/flushdb命令也会产生dump.rdb文件，但里面是空的，无意义
+- 执行shutdown且没有设置开启AOF持久化
+- 主从复制时，主节点自动触发
+
+**如何禁用快照**
+
+1. 动态所有停止RDB保存规则的方法：redis-cli config set save ""
+2. 配置文件中 save ""
+
+**RDB其他配置项**
+
+- stop-writes-on-bgsave-error：默认yes，如果配置成no，表示你不在乎数据不一致或者有其他的手段发现和控制这种不一致，那么在快照写入失败时，也能确保redis继续接受新的写请求。
+- rdbcompression：默认yes，对于存储到磁盘中的快照，可以设置是否进行压缩存储。如果是的话，redis会采用LZF算法进行压缩。如果你不想消耗CPU来进行压缩的话，可以设置为关闭此功能。
+- rdbchecksum：默认yes，在存储快照后，还可以让redis使用CRC64算法来进行数据校验，但是这样做会增加大约10%的性能消耗，如果希望获取到最大的性能提升，可以关闭此功能。
+- rdb-del-sync-files：默认no，在没有持久性的情况下删除复制中使用的RDB文件启用。
+
+### 优点
+
+- 适合大规模的数据恢复
+- 按照业务定时备份
+- 对数据完整性和一致性要求不高
+- RDB 文件在内存中的加载速度要比 AOF 快得多
+
+### 缺点
+
+- 在一定间隔时间做一次备份，所以如果redis意外down掉的话，就会丢失从当前至最近一次快照期间的数据，快照之间的数据会丢失
+- 内存数据的全量同步，如果数据量太大会导致I/0严重影响服务器性能
+- RDB依赖于主进程的fork，在更大的数据集中，这可能会导致服务请求的瞬间延迟。fork的时候内存中的数据被克隆了一份，大致2倍的膨胀性，需要考虑
+
+## AOF
+
+以日志的形式来记录每个写操作，将Redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作。
+
+默认情况下，redis是没有开启AOF(append only file)的。开启AOF功能需要设置配置：**appendonly yes**。
+
+Aof保存的是**appendonly.aof**文件。
+
+**AOF持久化工作流程**
+
+1. Client作为命令的来源，会有多个源头以及源源不断的请求命令。
+2. 在这些命令到达Redis Server 以后并不是直接写入AOF文件，会将其这些命令先放入AOF缓存中进行保存。这里的AOF缓冲区实际上是内存中的一片区域，存在的目的是当这些命令达到一定量以后再写入磁盘，避免频繁的磁盘IO操作。
+3. AOF缓冲会根据AOF缓冲区**同步文件的三种写回策略**将命令写入磁盘上的AOF文件。
+4. 随着写入AOF内容的增加为避免文件膨胀，会根据规则进行命令的合并(又称**AOF重写**)，从而起到AOF文件压缩的目的。
+5. 当Redis Server 服务器重启的时候会从AOF文件载入数据。
+
+**AOF缓冲区三种写回策略**
+
+- Always：同步写回，每个写命令执行完立刻同步地将日志写回磁盘。优点：可靠性高，数据基本不会丢失。缺点：每个写命令都要落盘，性能影响很大。
+- everysec：每秒写回，每个写命令执行完，只是先把日志写到AOF文件的内存缓冲区，每隔1秒把缓冲区中的内容写入磁盘。优点：性能适中。缺点：宕机时丢失一秒内的数据。
+- no：操作系统控制的写回，每个写命令执行完，只是先把日志写到AOF文件的内存缓冲区，由操作系统决定何时将缓冲区内容写回磁盘。优点：性能好。缺点：宕机时丢失数据较多。
+
+
 
 # String 还是 Hash 存储对象数据更好呢？
 
