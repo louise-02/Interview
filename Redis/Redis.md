@@ -845,7 +845,7 @@ hxllp
 
 ![image-20240225165913467](pictures/image-20240225165913467.png)
 
-## RDB
+## RDB（Redis DataBase）
 
 RDB 持久性以**指定的时间间隔**执行数据集的时间点**快照**。Redis的数据都在内存中，保存备份时它执行的是**全量快照**，这个快照文件就称为RDB文件(dump.rdb)，其中，RDB就是Redis DataBase的缩写。
 
@@ -872,6 +872,8 @@ save 60 3：每隔30秒，如果有三个key发生变化，就写一份新的RDB
 `redis-server /opt/redis-7.0.0/redis.conf`
 
 **恢复数据**
+
+redis会自动从dump文件路径下找到rdb文件进行恢复。
 
 ```
 //模拟宕机
@@ -934,15 +936,17 @@ redis-server /opt/redis-7.0.0/redis.conf
 - 内存数据的全量同步，如果数据量太大会导致I/0严重影响服务器性能
 - RDB依赖于主进程的fork，在更大的数据集中，这可能会导致服务请求的瞬间延迟。fork的时候内存中的数据被克隆了一份，大致2倍的膨胀性，需要考虑
 
-## AOF
+## AOF（Append Only File）
 
-以日志的形式来记录每个写操作，将Redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作。
+**以日志的形式**来记录每个写操作，将Redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作。
 
 默认情况下，redis是没有开启AOF(append only file)的。开启AOF功能需要设置配置：**appendonly yes**。
 
 Aof保存的是**appendonly.aof**文件。
 
 **AOF持久化工作流程**
+
+![image-20240228214326655](pictures/image-20240228214326655.png)
 
 1. Client作为命令的来源，会有多个源头以及源源不断的请求命令。
 2. 在这些命令到达Redis Server 以后并不是直接写入AOF文件，会将其这些命令先放入AOF缓存中进行保存。这里的AOF缓冲区实际上是内存中的一片区域，存在的目的是当这些命令达到一定量以后再写入磁盘，避免频繁的磁盘IO操作。
@@ -952,11 +956,150 @@ Aof保存的是**appendonly.aof**文件。
 
 **AOF缓冲区三种写回策略**
 
-- Always：同步写回，每个写命令执行完立刻同步地将日志写回磁盘。优点：可靠性高，数据基本不会丢失。缺点：每个写命令都要落盘，性能影响很大。
-- everysec：每秒写回，每个写命令执行完，只是先把日志写到AOF文件的内存缓冲区，每隔1秒把缓冲区中的内容写入磁盘。优点：性能适中。缺点：宕机时丢失一秒内的数据。
-- no：操作系统控制的写回，每个写命令执行完，只是先把日志写到AOF文件的内存缓冲区，由操作系统决定何时将缓冲区内容写回磁盘。优点：性能好。缺点：宕机时丢失数据较多。
+- **Always**：同步写回，每个写命令执行完立刻同步地将日志写回磁盘。优点：可靠性高，数据基本不会丢失。缺点：每个写命令都要落盘，性能影响很大。
+- **everysec**：每秒写回，每个写命令执行完，只是先把日志写到AOF文件的内存缓冲区，每隔1秒把缓冲区中的内容写入磁盘。优点：性能适中。缺点：宕机时丢失一秒内的数据。
+- **no**：操作系统控制的写回，每个写命令执行完，只是先把日志写到AOF文件的内存缓冲区，由操作系统决定何时将缓冲区内容写回磁盘。优点：性能好。缺点：宕机时丢失数据较多。
+
+**开启AOF**
+
+appendonly yes
+
+![image-20240228213041975](pictures/image-20240228213041975.png)
+
+**修改AOF回写策略**
+
+appendfsync everysec
+
+![image-20240228213203071](pictures/image-20240228213203071.png)
+
+**修改AOF文件存储路径**
+
+appenddirname "appendonlydir"
+
+最终保存路径为rdb中配置的dir+appenddirname
+
+![image-20240228213350006](pictures/image-20240228213350006.png)
+
+**修改AOF文件名**
+
+Redis7之前：只有一个aof文件
+
+Redis7之后：生成三个aof文件，Multi Part Aof
+
+- BASE文件：表示基础AOF，它一般由子进程通过重写产生，该文件最多只有一个。
+- INCR文件：表示增量AOF，它一般会在AOFRW（AOF重写）开始执行时被创建，该文件可能存在多个。
+- HISTORY文件：表示历史AOF，它由BASE和INCR变化而来，每次AOFRW成功完成后时，本次AOFRW之前对应的BASE和INCR都将变成HISTORY，HISTORY类型的AOF会被Redis自动删除。为了管理这些AOF文件，引入了manifest（清单）文件来跟踪、管理这些AOF。同时，为了便于AOF备份和拷贝，将所有的AOF文件和manifest文件放入一个单独的文件夹中，目录名由appenddirname配置。
 
 
+
+![image-20240228214857329](pictures/image-20240228214857329.png)
+
+**AOF数据恢复**
+
+redis会自动读取AOF存储路径中的文件进行数据加载。
+
+注意flushdb也会被写入到AOF文件中。
+
+```
+cd /opt/redisDump
+//修改完配置文件后进行重启
+redis-cli -a password shutdown
+redis-server /opt/redis-7.0.0/redis.conf
+
+//清空数据进行重新模拟
+> set k5 v5
+> set k6 v6
+redis-cli -a password shutdown
+
+//删除rdb文件,重启服务发现数据是完整的
+rm myRedis.rdb
+redis-server /opt/redis-7.0.0/redis.conf
+```
+
+**AOF异常恢复**
+
+`redis-check-aof  --fix filename` 对AOF文件进行恢复
+
+### **AOF重写机制**
+
+当AOF文件越来越大时，触发阈值时，启动AOF文件的内容压缩，只保留可以恢复数据的最小指令集。
+
+`auto-aof-rewrite-percentage 100`：根据上次重写后的aof大小，判断当前aof大小是不是增长了1倍
+
+`auto-aof-rewrite-min-size 64mb`：重写时满足的文件大小
+
+两个参数都满足的时候会**自动触发**重写，也可以使用`bgrewriteaof`来**手动触发**重写。
+
+**AOF文件重写并不是对原文件进行重新整理，而是直接读取服务器现有的键值对，然后用一条命令去代替之前记录这个键值对的多条命令，生成一个新的文件去替换原有的AOF文件。**
+
+![image-20240228232433332](pictures/image-20240228232433332.png)
+
+```
+//模拟测试重写机制 将size改为1kb
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 1kb
+
+//模拟单独测试aof 关闭rbd和aof混合
+aof-use-rdb-preamble no
+
+//删除之前的rdb与aof文件
+redis-cli -a password shutdown
+cd /opt/redisDump
+rm myRedis.rdb
+rm -rf appendonlydir/*
+redis-server /opt/redis-7.0.0/redis.conf
+
+//此时对key进行操作直到incr文件超过1kb进行重写
+> set k1 v1
+> set k2 v2
+> set k1 v11
+...
+```
+
+重写前
+
+![image-20240228233623860](pictures/image-20240228233623860.png)
+
+重写后，会将incr文件重写到base文件中
+
+![image-20240228233630216](pictures/image-20240228233630216.png)
+
+**重写执行流程**
+
+1. 在重写开始前，redis会创建一个“重写子进程”，这个子进程会读取现有的AOF文件，并将其包含的指令进行分析压缩并写入到一个临时文件中。
+2. 与此同时，主进程会将新接收到的写指令一边累积到内存缓冲区中，一边继续写入到原有的AOF文件中，这样做是保证原有的AOF文件的可用性，避免在重写过程中出现意外。
+3. 当“重写子进程”完成重写工作后，它会给父进程发一个信号，父进程收到信号后就会将内存中缓存的写指令追加到新AOF文件中。
+4. 当追加结束后，redis就会用新AOF文件来代替旧AOF文件，之后再有新的写指令，就都会追加到新的AOF文件中。
+5. **重写aof文件的操作，并没有读取旧的aof文件，而是将整个内存中的数据库内容用命令的方式重写了一个新的aof文件**，这点和快照有点类似。
+
+### 优点
+
+- 更好的保护数据不丢失 、性能高、可做紧急恢复
+
+### 缺点
+
+- 相同数据集的数据而言aof文件要远大于rdb文件，**恢复速度慢**于rdb
+- aof运行效率要慢于rdb,每秒同步策略效率较好，不同步效率和rdb相同
+
+## RDB+AOF
+
+`aof-use-rdb-preamble yes`：开启RDB与AOF的混合使用
+
+在这种情况下，**当redis重启的时候会优先载入AOF文件来恢复原始的数据**，因为在通常情况下AOF文件保存的数据集要比RDB文件保存的数据集要完整。
+
+RDB的数据不实时，同时使用两者时服务器重启也只会找AOF文件。那要不要只使用AOF呢？作者建议不要，因为RDB更适合用于备份数据库(AOF在不断变化不好备份)，留着rdb作为一个万一的手段。
+
+![image-20240229000759391](pictures/image-20240229000759391.png)
+
+开启混合模式后，**base文件会从aof文件变成rdb文件**，实际AOF恢复数据时是RDB+AOF来进行恢复的。
+
+## 纯内存模式
+
+同时关闭RDB和AOF。
+
+`save ""`：禁用rdb持久化模式下，我们仍然可以使用命令save、bgsave生成rdb文件。
+
+`appendonly no`：禁用aof持久化模式下，我们仍然可以使用命令bgrewriteaof生成aof文件。
 
 # String 还是 Hash 存储对象数据更好呢？
 
