@@ -820,8 +820,6 @@ hxllo
 hxllp
 ```
 
-
-
 # 通用命令
 
 | 命令                   | 介绍                                                         |
@@ -918,10 +916,10 @@ redis-server /opt/redis-7.0.0/redis.conf
 
 **RDB其他配置项**
 
-- stop-writes-on-bgsave-error：默认yes，如果配置成no，表示你不在乎数据不一致或者有其他的手段发现和控制这种不一致，那么在快照写入失败时，也能确保redis继续接受新的写请求。
-- rdbcompression：默认yes，对于存储到磁盘中的快照，可以设置是否进行压缩存储。如果是的话，redis会采用LZF算法进行压缩。如果你不想消耗CPU来进行压缩的话，可以设置为关闭此功能。
-- rdbchecksum：默认yes，在存储快照后，还可以让redis使用CRC64算法来进行数据校验，但是这样做会增加大约10%的性能消耗，如果希望获取到最大的性能提升，可以关闭此功能。
-- rdb-del-sync-files：默认no，在没有持久性的情况下删除复制中使用的RDB文件启用。
+- **stop-writes-on-bgsave-error**：默认yes，如果配置成no，表示你不在乎数据不一致或者有其他的手段发现和控制这种不一致，那么在快照写入失败时，也能确保redis继续接受新的写请求。
+- **rdbcompression**：默认yes，对于存储到磁盘中的快照，可以设置是否进行压缩存储。如果是的话，redis会采用LZF算法进行压缩。如果你不想消耗CPU来进行压缩的话，可以设置为关闭此功能。
+- **rdbchecksum**：默认yes，在存储快照后，还可以让redis使用CRC64算法来进行数据校验，但是这样做会增加大约10%的性能消耗，如果希望获取到最大的性能提升，可以关闭此功能。
+- **rdb-del-sync-files**：默认no，在没有持久性的情况下删除复制中使用的RDB文件启用。
 
 ### 优点
 
@@ -1100,6 +1098,402 @@ RDB的数据不实时，同时使用两者时服务器重启也只会找AOF文�
 `save ""`：禁用rdb持久化模式下，我们仍然可以使用命令save、bgsave生成rdb文件。
 
 `appendonly no`：禁用aof持久化模式下，我们仍然可以使用命令bgrewriteaof生成aof文件。
+
+# **Redis事务**
+
+[Redis事务 https://redis.io/docs/manual/transactions/](https://redis.io/docs/manual/transactions/)
+
+可以一次执行多个命令，本质是一组命令的集合。一个事务中的所有命令都会序列化，**按顺序地串行化执行而不会被其它命令插入，不许加塞**。
+
+**Redis事务的特点**
+
+- 单独的隔离操作：Redis的事务**仅仅是保证事务里的操作会被连续独占的执行**，redis命令执行是单线程架构，在执行完事务内所有指令前是不可能再去同时执行其他客户端的请求的
+- 没有隔离级别的概念：因为事务提交前任何指令都不会被实际执行，也就不存在”事务内的查询要看到事务里的更新，在事务外查询不能看到”这种问题了
+- 不保证原子性：Redis的事务**不保证原子性**，也就是不保证所有指令同时成功或同时失败，只有决定是否开始执行全部指令的能力，没有执行到一半进行回滚的能力
+- 排它性：Redis会保证一个事务内的命令依次执行，而不会被其它命令插入
+
+**常用命令**
+
+| 命令                   | 介绍                                                         |
+| ---------------------- | ------------------------------------------------------------ |
+| **MULTI**              | 标记一个事务块的开始                                         |
+| **EXEC**               | 执行所有事务块内的命令                                       |
+| **DISCARD**            | 取消事务，放弃执行所有事务块内的命令                         |
+| **WATCH** key [key...] | 监视一个或多个key，如果在事务执行之前这些key被其他命令所改动，那么事务将被打断 |
+| **UNWATCH**            | 取消WATCH命令内对所有key的监视                               |
+
+**正常执行**
+
+```
+> MULTI
+OK
+> set k1 v1
+QUEUED
+> set k2 v2
+QUEUED
+> EXEC
+OK
+OK
+> get k1
+v1
+> get k2
+v2
+```
+
+**放弃事务**
+
+```
+> MULTI
+OK
+> set k1 v11
+QUEUED
+> DISCARD
+OK
+> get k1
+v1
+```
+
+**编译错误**
+
+如果命令块中有编译出错的命令，整个事务将不会执行
+
+```
+> MULTI
+OK
+> set k1 v11
+QUEUED
+> set k2
+ERR wrong number of arguments for 'set' command
+> EXEC
+EXECABORT Transaction discarded because of previous errors.
+> get k1
+v1
+```
+
+**执行错误**
+
+如果命令块中未出现编译错误，而是在执行的时候有错误，其他代码块将正常执行
+
+```
+> MULTI
+OK
+> set k1 v11
+QUEUED
+> incr k2
+QUEUED
+> EXEC
+OK
+> get k1
+v11
+> get k2
+v2
+```
+
+**WATCH监控**
+
+Redis使用WATCH来提供乐观锁定，在监视的多个key中，如果至少有一个key在执行EXEC命令之前被改变，EXEC命令会返回Null并通知事务中断。
+
+```
+//client1中
+> get k1
+v11
+> get k2
+v2
+> WATCH k1
+OK
+> MULTI
+OK
+> set k1 v111
+QUEUED
+> set k2 v222
+QUEUED
+
+//client2中
+set k1 xxx
+
+//回到client1中继续输入
+> EXEC
+null
+> get k1
+xxx
+> get k2
+v2
+```
+
+**UNWATCH**
+
+在MULTI的途中进行UNWATCH是没有生效的，只能WATCH后紧跟UNWATCH才可以
+
+```
+//重置k1 k2
+> set k1 v1
+OK
+> set k2 v2
+OK
+
+//client1中
+> WATCH k1
+OK
+> MULTI
+OK
+> set k1 v11
+QUEUED
+> set k2 v22
+QUEUED
+> UNWATCH
+QUEUED
+
+//client2中
+set k1 xxx
+
+//client1中
+> EXEC
+null
+> get k1
+xxx
+> get k2
+v2
+```
+
+测试紧跟UNWATCH
+
+```
+//重置k1 k2
+> set k1 v1
+OK
+> set k2 v2
+OK
+
+//client1中
+> WATCH k1
+OK
+> get k1
+v1
+
+//client2中
+set k1 xxx
+
+//client1中
+> UNWATCH
+OK
+> MULTI
+OK
+> get k1
+QUEUED
+> set k1 v11
+QUEUED
+> set k2 v22
+QUEUED
+> get k1
+QUEUED
+> EXEC
+xxx
+OK
+OK
+v11
+> get k1
+v11
+> get k2
+v22
+```
+
+# Redis管道（Pipeline）
+
+[Redis管道 https://redis.io/docs/manual/pipelining/](https://redis.io/docs/manual/pipelining/)
+
+**问题：如何优化频繁命令往返造成的性能瓶颈？**
+
+Redis是一种基于客户端-服务端模型以及请求/响应协议的TCP服务。一个请求会遵循以下步骤：
+
+1 客户端向服务端发送命令分四步(发送命令→命令排队→命令执行→返回结果)，并监听Socket返回，通常以阻塞模式等待服务端响应。
+
+2 服务端处理命令，并将结果返回给客户端。
+
+上述两步称为：Round Trip Time(简称**RTT**,数据包往返于两端的时间)
+
+![image-20240229221113817](pictures/image-20240229221113817.png)
+
+如果同时需要执行大量的命令，那么就要等待上一条命令应答后再执行，这中间不仅仅多了RTT（Round Time Trip），而且还频繁调用系统IO，发送网络请求，同时需要redis调用多次read()和write()系统方法，系统方法会将数据从用户态转移到内核态，这样就会对进程上下文有比较大的影响了，性能不太好。
+
+**管道是什么**
+
+Pipeline是为了解决RTT往返回时，仅仅是将命令打包一次性发送，对整个Redis的执行不造成其它任何影响。批处理命令变种优化措施，类似Redis的原生批命令(mget和mset)。
+
+**管道使用**
+
+```
+//新建文件pip.txt
+set k1 x1
+set k2 x2
+hset h1 mn
+
+//服务器上执行
+cat pip.txt | redis-cli -a password -pipe
+
+//执行查询
+> get k1
+x1
+> get k2
+x2
+> hgetall h1
+m
+n
+```
+
+**Pipeline与事务对比**
+
+- 事务具有原子性，管道不具有原子性
+- 管道一次性将多条命令发送到服务器，事务是一条一条的发，事务只有在接收到exec命令后才会执行，管道不会
+- 执行事务时会**阻塞**其他命令的执行，而执行管道中的命令时不会
+
+**注意事项**
+
+- pipeline缓冲的指令只是会依次执行，不保证原子性，如果执行中指令发生异常，将会继续执行后续的指令
+- 使用pipeline组装的命令个数不能太多，不然数据量过大客户端阻塞的时间可能过久，同时服务端此时也被迫回复一个队列答复，占用很多内存
+
+# **Redis发布订阅（了解）**
+
+[Redis发布订阅 https://redis.io/docs/manual/pubsub/](https://redis.io/docs/manual/pubsub/)
+
+是一种消息通信模式：发送者(PUBLISH)发送消息，订阅者(SUBSCRIBE)接收消息，可以实现进程间的消息传递。Redis可以实现消息中间件MQ的功能，通过发布订阅实现消息的引导和分流。仅代表我个人，不推荐使用该功能，专业的事情交给专业的中间件处理，redis就做好分布式缓存功能。
+
+| 命令                                  | 介绍                                                         |
+| ------------------------------------- | ------------------------------------------------------------ |
+| SUBSCRIBE channel [channel ...]       | 订阅给定的一个或多个频道的信息，推荐先执行订阅后再发布，订阅成功之前发布的消息是收不到的 |
+| PUBLISH channel message               | 发布消息到指定的频道                                         |
+| PSUBSCRIBE pattern [pattern ...]      | 按照模式批量订阅，订阅一个或多个符合给定模式(支持*号?号之类的)的频道 |
+| PUBSUB CHANNELS                       | 由活跃频道组成的列表                                         |
+| PUBSUB NUMSUB [channel [channel ...]] | 某个频道有几个订阅者                                         |
+| PUBSUB NUMPAT                         | 只统计使用PSUBSCRIBE命令执行的，返回客户端订阅的唯一模式的数量 |
+| UNSUBSCRIBE [channel [channel ...]]   | 取消订阅                                                     |
+| PUNSUBSCRIBE [pattern [pattern ...]]  | 退订所有给定模式的频道                                       |
+
+**缺点**
+
+- 发布的消息在Redis系统中不能持久化，因此，必须先执行订阅，再等待消息发布。如果先发布了消息，那么该消息由于没有订阅者，消息将被直接丢弃
+- 消息只管发送对于发布者而言消息是即发即失的，不管接收，也没有ACK机制，无法保证消息的消费成功。
+- 以上的缺点导致Redis的Pub/Sub模式就像个小玩具，在生产环境中几乎无用武之地，为此Redis5.0版本新增了Stream数据结构，不但支持多播，还支持数据持久化，相比Pub/Sub更加的强大
+
+# Redis复制（replica）
+
+[Redis复制 https://redis.io/docs/management/replication/](https://redis.io/docs/management/replication/)
+
+就是主从复制，**master以写为主，Slave以读为主**。当master数据变化的时候，自动将新的数据异步同步到其它slave数据库
+
+**作用**
+
+可以进行读写分离、容灾恢复、数据备份、水平扩容支撑高并发。
+
+**常用命令**
+
+| 命令                    | 介绍                                                         |
+| ----------------------- | ------------------------------------------------------------ |
+| info replication        | 可以查看复制节点的主从关系和配置信息                         |
+| slaveof 主库IP 主库端口 | 在运行期间修改slave节点的信息，如果已有主库还是会更换到新的主库，重启后将失效 |
+| slaveof no one          | 使当前数据库停止与其他数据库的同步，转成主数据库，自立为王   |
+
+**配置文件修改**
+
+配从不配主，标记（从）的为从库配置，其余为公共配置。
+
+主从复制架构，三台机器分别为01，02，03。
+
+可以配置为01主，02和03都配置为01。
+
+也可以01主，02配置01为主，03配置02为主减轻01复制压力。
+
+1. daemonize yes
+2. 注释掉bind 127.0.0.1
+3. protected-mode no
+4. requirepass password
+5. dbfilename myRedis.rdb
+6. appendonly yes
+7. appenddirname “appendonlydir”
+8. aof-use-rdb-preamble yes
+9. **masterauth password**（从）：从库用来配置master密码
+10. **replicaof 主库IP 主库端口**：从库用来配置主库ip和端口
+11. 检查主从库的防火墙
+12. 随后先启动master，后启动slave
+
+**Q&A**
+
+- 从机可以执行写命令吗？：不可以，会报错
+- 主机down后，从机会上位吗？：不会，从机不动等待主机启动，不影响查询
+- 主机down后重连，主从关系还在吗？：还在，可以正常同步数据
+- 后台从机down后，重启后还能跟上大部队吗？：从机重连后会先进行一次全量复制，后续正常同步
+
+**主从复制工作流程**
+
+1. slave启动成功连接到master后会发送一个sync命令
+2. slave首次全新连接master,一次完全同步（全量复制)将被自动执行，**slave自身原有数据会被master数据覆盖清除**
+3. master节点收到sync命令后会开始在后台保存快照(即RDB持久化，主从复制时会触发RDB)，同时收集所有接收到的用于修改数据集命令缓存起来，master节点执行RDB持久化完后，master将rdb快照文件和所有缓存的命令发送到所有slave,以完成一次完全同步
+4. 而slave服务在接收到数据库文件数据后，将其存盘并加载到内存中，从而完成复制初始化
+5. repl-ping-replica-period 10 master会周期的向slave发送ping包
+6. MASTER继续将新的所有收集到的修改命令自动依次传给slave，完成同步
+7. MASTER会检查backlog里面的offset，master和slave都会保存一个复制的offset还有一个masterId，offset是保存在backlog中的。Master只会把已经复制的offset后面的数据复制给Slave，类似断点续传。
+
+## 缺点
+
+- **复制延时，信号衰减**：由于所有的写操作都是先在Master上操作，然后同步更新到Slave上，所以从Master同步到Slave机器有一定的延迟，当系统很繁忙的时候，延迟问题会更加严重，Slave机器数量的增加也会使这个问题更加严重。
+- **MASTER挂了如何办？**：主从情况下，Slave节点只会等待主库上线，需要人工干预
+
+# **Redis哨兵（sentinel）**
+
+[Redis哨兵 https://redis.io/docs/manual/sentinel/](https://redis.io/docs/manual/sentinel/)
+
+吹哨人巡查监控后台master主机是否故障，如果故障了**根据投票数自动**将某一个从库转换为新主库，继续对外服务。实现无人值守运维。
+
+**作用**
+
+- 主从监控：监控主从redis库运行是否正常
+- 消息通知：哨兵可以将故障转移的结果发送给客户端
+- 故障转移：如果Master异常，则会进行主从切换，将其中一个Slave作为新Master
+- 配置中心：客户端通过连接哨兵来获得当前Redis服务的主节点地址
+
+**Sentinel架构**
+
+3个哨兵，自动监控和维护集群，不存放数据。1主2从，用于数据读取和存放。
+
+![image-20240302225650032](pictures/image-20240302225650032.png)
+
+`vi /opt/redis-7.0.0/sentinel.conf`
+
+- bind：服务监听地址，用于客户端连接，默认本机地址
+- daemonize：是否以后台daemon方式运行
+- protected-mode：安全保护模式
+- port：端口
+- logfile：日志存储路径
+- pidfile：pid文件路径
+- dir：工作目录
+- sentinel monitor <master-name> <ip> <redis-port> <quorum>：设置要监控的master服务器，quorum表示最少有几个哨兵认可客观下线，同意故障迁移的法定票数。
+- sentinel auth-pass <master-name> <password>：master设置了密码，连接master服务的密码
+
+# **Redis配置文件小结**
+
+| 配置                             | 介绍                                                         |
+| -------------------------------- | ------------------------------------------------------------ |
+| daemonize yes                    | 通过后台启动                                                 |
+| protected-mode no                | 安全模式，开启外部无法连接                                   |
+| bind 127.0.0.1                   | 直接注释掉或改成本机IP地址，否则影响远程IP连接               |
+| requirepass password             | 设置redis密码                                                |
+| pidfile /var/run/redis_6379.pid  | pid文件路径                                                  |
+| logfile "/opt/redis-7.0.0/logs"  | 日志文件路径                                                 |
+|                                  |                                                              |
+| save 3600 10                     | RDB保存间隔，每隔3600秒，如果有10个key发生变化，就写一份新的RDB文件 |
+| dir /opt/redisDump/              | RDB文件路径                                                  |
+| dbfilename myRedis.rdb           | RDB文件名名称                                                |
+|                                  |                                                              |
+| appendonly yes                   | 开启AOF                                                      |
+| appendfsync always\|everysec\|no | AOF回写策略                                                  |
+| appenddirname “appendonlydir”    | AOF存储文件夹名称，实际路径为 dir+appenddirname              |
+| appendfilename "appendonly.aof"  | AOF文件名称                                                  |
+| auto-aof-rewrite-percentage 100  | AOF，根据上次重写后的aof大小，判断当前aof大小是否增长了的百分比 |
+| auto-aof-rewrite-min-size 64mb   | AOF，重写时满足的文件大小                                    |
+| aof-use-rdb-preamble yes         | 开启AOF与RDB混合使用                                         |
+|                                  |                                                              |
+| masterauth passwrod              | 主从模式，从库用来配置master密码                             |
+| replicaof 主库ip 主库端口        | 主从模式，从库用来配置主库ip和端口                           |
+| repl-ping-replica-period 10      | 主从模式，master发送ping包的周期                             |
 
 # String 还是 Hash 存储对象数据更好呢？
 
