@@ -1378,7 +1378,7 @@ n
 
 [Redis复制 https://redis.io/docs/management/replication/](https://redis.io/docs/management/replication/)
 
-就是主从复制，**master以写为主，Slave以读为主**。当master数据变化的时候，自动将新的数据异步同步到其它slave数据库
+就是主从复制，**master以写为主，Slave以读为主**。当master数据变化的时候，自动将新的数据异步同步到其它slave数据库。
 
 **作用**
 
@@ -1394,13 +1394,13 @@ n
 
 **配置文件修改**
 
-配从不配主，标记（从）的为从库配置，其余为公共配置。
+现在配置了三台机器，192.168.119.201，192.168.119.202，192.168.119.203。
 
-主从复制架构，三台机器分别为01，02，03。
+**配从不配主**，标记（从）的为从库配置，其余为公共配置。
 
-可以配置为01主，02和03都配置为01。
+可以配置为201主，202和203为201的从。
 
-也可以01主，02配置01为主，03配置02为主减轻01复制压力。
+也可以201主，202为201的从，203为202的从，减轻201复制压力。
 
 1. daemonize yes
 2. 注释掉bind 127.0.0.1
@@ -1411,7 +1411,7 @@ n
 7. appenddirname “appendonlydir”
 8. aof-use-rdb-preamble yes
 9. **masterauth password**（从）：从库用来配置master密码
-10. **replicaof 主库IP 主库端口**：从库用来配置主库ip和端口
+10. **replicaof 主库IP 主库端口**（从）：从库用来配置主库ip和端口
 11. 检查主从库的防火墙
 12. 随后先启动master，后启动slave
 
@@ -1456,8 +1456,6 @@ n
 
 ![image-20240302225650032](pictures/image-20240302225650032.png)
 
-`vi /opt/redis-7.0.0/sentinel.conf`
-
 - bind：服务监听地址，用于客户端连接，默认本机地址
 - daemonize：是否以后台daemon方式运行
 - protected-mode：安全保护模式
@@ -1465,8 +1463,916 @@ n
 - logfile：日志存储路径
 - pidfile：pid文件路径
 - dir：工作目录
-- sentinel monitor <master-name> <ip> <redis-port> <quorum>：设置要监控的master服务器，quorum表示最少有几个哨兵认可客观下线，同意故障迁移的法定票数。
-- sentinel auth-pass <master-name> <password>：master设置了密码，连接master服务的密码
+- **sentinel monitor [master-name] [ip] [redis-port] [quorum]**：设置要监控的master服务器，quorum表示最少有几个哨兵认可客观下线，同意故障迁移的法定票数。可以监听多个master，一行一个。
+- **sentinel auth-pass [master-name] [password]**：master设置了密码，连接master服务的密码
+- sentinel down-after-milliseconds [master-name] [milliseconds]：指定多少毫秒之后，主节点没有应答哨兵，此时哨兵主观上认为主节点下线
+- sentinel parallel-syncs [master-name] [nums]：表示允许并行同步的slave个数，当Master挂了后，哨兵会选出新的Master，此时，剩余的slave会向新的master发起同步数据
+- sentinel failover-timeout [master-name] [milliseconds]：故障转移的超时时间，进行故障转移时，如果超过设置的毫秒，表示故障转移失败
+- sentinel notification-script [master-name] [script-path] ：配置当某一事件发生时所需要执行的脚本
+- sentinel client-reconfig-script [master-name] [script-path]：客户端重新配置主节点参数脚本
+
+现在配置了三台机器，192.168.119.201，192.168.119.202，192.168.119.203。201为主，202和203为从。
+
+`vi /opt/redis-7.0.0/sentinel.conf`，三台机器都修改配置文件，注意这里201虽然为主，但是`redis.cof`需要配置masterauth。
+
+```
+bind 0.0.0.0
+daemonize yes
+protected-mode no
+port 26379
+logfile "/opt/redis-7.0.0/sentinel/sentinel.log"
+pidfile "/var/run/redis-sentinel.pid"
+dir "/opt/redis-7.0.0/sentinel"
+sentinel monitor mymaster 192.168.119.201 6379 2
+sentinel auth-pass mymaster 159753
+```
+
+`redis-sentinel /opt/redis-7.0.0/sentinel.conf --sentinel`，三台机器分别启动哨兵。
+
+**故障模拟**
+
+现在在201机器中关闭redis，`redis-cli -a password shutdown`
+
+在202机器中查看sentinel日志，`vi /opt/redis-7.0.0/sentinel/sentinel.log`
+
+```
+126139:X 02 Mar 2024 23:14:33.742 * Sentinel new configuration saved on disk
+126139:X 02 Mar 2024 23:14:33.742 # Sentinel ID is c0cff57a5e40ed979f523cee019a0b6e3c8fec72
+126139:X 02 Mar 2024 23:14:33.742 # +monitor master mymaster 192.168.119.201 6379 quorum 2
+126139:X 02 Mar 2024 23:14:33.744 * +slave slave 192.168.119.202:6379 192.168.119.202 6379 @ mymaster 192.168.119.201 6379
+126139:X 02 Mar 2024 23:14:33.745 * Sentinel new configuration saved on disk
+126139:X 02 Mar 2024 23:14:33.745 * +slave slave 192.168.119.203:6379 192.168.119.203 6379 @ mymaster 192.168.119.201 6379
+126139:X 02 Mar 2024 23:14:33.746 * Sentinel new configuration saved on disk
+126139:X 02 Mar 2024 23:14:35.154 * +sentinel sentinel 7e3f53516a446e417bd9623775c54870955b6ebe 192.168.119.203 26379 @ mymaster 192.168.119.201 6379
+126139:X 02 Mar 2024 23:14:35.155 * Sentinel new configuration saved on disk
+126139:X 02 Mar 2024 23:14:38.621 * +sentinel sentinel e74b9fd39ab83715e0e0860b9469ec60621d75f7 192.168.119.201 26379 @ mymaster 192.168.119.201 6379
+126139:X 02 Mar 2024 23:14:38.623 * Sentinel new configuration saved on disk
+//这里开始监听到201挂掉，选举202为最新master
+126139:X 02 Mar 2024 23:16:43.239 # +sdown master mymaster 192.168.119.201 6379
+126139:X 02 Mar 2024 23:16:43.294 * Sentinel new configuration saved on disk
+126139:X 02 Mar 2024 23:16:43.294 # +new-epoch 1
+126139:X 02 Mar 2024 23:16:43.296 * Sentinel new configuration saved on disk
+126139:X 02 Mar 2024 23:16:43.296 # +vote-for-leader e74b9fd39ab83715e0e0860b9469ec60621d75f7 1
+126139:X 02 Mar 2024 23:16:43.317 # +odown master mymaster 192.168.119.201 6379 #quorum 3/2
+126139:X 02 Mar 2024 23:16:43.317 # Next failover delay: I will not start a failover before Sat Mar  2 23:22:43 2024
+126139:X 02 Mar 2024 23:16:43.929 # +config-update-from sentinel e74b9fd39ab83715e0e0860b9469ec60621d75f7 192.168.119.201 26379 @ mymaster 192.168.119.201 6379
+126139:X 02 Mar 2024 23:16:43.929 # +switch-master mymaster 192.168.119.201 6379 192.168.119.202 6379
+126139:X 02 Mar 2024 23:16:43.929 * +slave slave 192.168.119.203:6379 192.168.119.203 6379 @ mymaster 192.168.119.202 6379
+126139:X 02 Mar 2024 23:16:43.929 * +slave slave 192.168.119.201:6379 192.168.119.201 6379 @ mymaster 192.168.119.202 6379
+126139:X 02 Mar 2024 23:16:43.931 * Sentinel new configuration saved on disk
+```
+
+此时，查看三台主机中的`sentinel.conf`和`redis.conf`，文件均发生改变。
+
+```
+//sentinel.conf中修改了 sentinel monito
+sentinel monitor mymaster 192.168.119.202 6379 2
+sentinel auth-pass mymaster 159753
+
+//redis.conf中修改了 replicaof 主库ip 主库端口
+201中添加了 replicaof 192.168.119.202 6379
+202中删除了 replicaof 192.168.119.201 6379
+```
+
+## 哨兵运行流程和选举原理
+
+当一个主从配置中的master失效之后，sentinel可以选举出一个新的master用于自动接替原master的工作，主从配置中的其他redis服务器自动指向新的master同步数据。一般建议sentinel采取**奇数台**，防止某一台sentinel无法连接到master导致误切换。
+
+1. **SDown主观下线(Subjectively Down)**
+
+所谓主观下线（Subjectively Down， 简称 SDOWN）指的是**单个Sentinel实例**对服务器做出的下线判断，即单个sentinel认为某个服务下线（有可能是接收不到订阅，之间的网络不通等等原因）。主观下线就是说如果服务器在[**sentinel down-after-milliseconds**]给定的毫秒数之内没有回应PING命令或者返回一个错误消息， 那么这个Sentinel会主观的(单方面的)认为这个master不可以用了。
+
+2. **ODown客观下线(Objectively Down)**
+
+ODOWN需要一定数量的sentinel，**多个哨兵达成一致意见**才能认为一个master客观上已经宕掉。
+
+**sentinel monitor [master-name] [ip] [redis-port] [quorum]**，**quorum这个参数是进行客观下线的一个依据**，法定人数/法定票数。意思是至少有quorum个sentinel认为这个master有故障才会对这个master进行下线以及故障转移。因为有的时候，某个sentinel节点可能因为自身网络原因导致无法连接master，而此时master并没有出现故障，所以这就需要多个sentinel都一致认为该master有问题，才可以进行下一步操作，这就保证了公平性和高可用。
+
+
+
+3. **选举出领导者哨兵(哨兵中选出兵王)**
+
+当主节点被判断客观下线以后，各个哨兵节点会进行协商，先**选举出一个领导者哨兵节点（兵王）**并由该领导者节点，也即被选举出的兵王进行failover（故障迁移）。
+
+Raft算法
+
+![image-20240303101658180](pictures/image-20240303101658180.png)
+
+监视该主节点的所有哨兵都有可能被选为领导者，选举使用的算法是Raft算法；Raft算法的基本思路**是先到先得**：即在一轮选举中，哨兵A向B发送成为领导者的申请，如果B没有同意过其他哨兵，则会同意A成为领导者。
+
+4. **由兵王开始推动故障切换流程并选出一个新master**
+
+**Sentinel leader根据规则选择某个Slave成为新的Master。**
+
+redis.conf文件中，优先级slave-priority或者replica-priority最高的从节点(数字越小优先级越高 )。
+
+复制偏移位置offset最大的从节点。
+
+最小Run ID的从节点，字典顺序，ASCII码。
+
+![image-20240303104213040](pictures/image-20240303104213040.png)
+
+**其他Slave节点更换Master**
+
+Sentinel leader会对选举出的新master执行slaveof no one操作，将其提升为master节点。
+
+Sentinel leader向其它slave发送命令，让剩余的slave成为新的master节点的slave。
+
+将之前已下线的老master设置为新选出的新master的从节点，当老master重新上线后，它会成为新master的从节点。
+
+## 哨兵使用建议
+
+- 哨兵节点的数量应为多个，哨兵本身应该集群，保证高可用
+- 哨兵节点的数量应该是奇数
+- 各个哨兵节点的配置应一致
+- 如果哨兵节点部署在Docker等容器里面，尤其要注意端口的正确映射
+- 哨兵集群+主从复制，并不能保证数据零丢失（在Master挂掉后，之后的操作可能有数十秒，会导致丢失数据）：**承上启下引出集群**
+
+# Redis集群（cluster）
+
+[Redis集群 https://redis.io/docs/reference/cluster-spec/](https://redis.io/docs/reference/cluster-spec/)
+
+Redis集群是一个提供在多个Redis节点间共享数据的程序集，Redis集群可以支持多个Master。
+
+Redis集群**不保证强一致性**，这意味着在特定的条件下，Redis集群可能会丢掉一些被系统收到的写入请求命令。因为某个Master宕机时候，选取其Slave上位也需要花费一定时间。
+
+![image-20240303171736916](pictures/image-20240303171736916.png)
+
+**作用**
+
+- Redis集群支持多个Master，每个Master又可以挂载多个Slave：读写分离，支持数据的高可用，支持海量数据的读写存储操作
+- 由于Cluster自带Sentinel的故障转移机制，内置了高可用的支持，无需再去使用哨兵功能
+- 客户端与Redis的节点连接，不再需要连接集群中所有的节点，只需要任意连接集群中的一个可用节点即可
+- **槽位slot**负责分配到各个物理服务节点，由对应的集群来负责维护节点、插槽和数据之间的关系
+
+## 集群算法-分片-槽位slot
+
+![image-20240303172154810](pictures/image-20240303172154810.png)
+
+**Redis集群的槽位slot**
+
+Redis集群没有使用一致性hash，而是引入了**哈希槽**的概念。
+
+Redis集群有16384个哈希槽，每个key通过CRC16校验后对16384取模来决定放置哪个槽，集群的每个节点负责一部分hash槽。
+
+![image-20240303172420172](pictures/image-20240303172420172.png)
+
+**Redis集群的分片**
+
+分片：使用Redis集群时我们会将存储的数据分散到多台redis机器上，这称为分片。简言之，集群中的每个Redis实例都被认为是整个数据的一个分片。
+
+如何找到给定key的分片：为了找到给定key的分片，我们对key进行CRC16(key)算法处理并通过对总分片数量取模。然后，使用确定性哈希函数，这意味着给定的key将多次始终映射到同一个分片，我们可以推断将来读取特定key的位置。
+
+**槽位slot与分片的优势**
+
+方便扩缩容和数据分派查找。
+
+这种结构很容易添加或者删除节点，比如我们想再添加一个节点D，我们需要从ABC中获取部分槽到该节点上。如果想移除节点A，需要将A中的槽移动到BC节点上。无论添加和删除或者改变某个节点的哈希槽的数量都不会造成集群不可用状态。
+
+**slot槽位映射，一般业界有三种解决方案**
+
+---
+
+**哈希取余分区**
+
+![image-20240303173554701](pictures/image-20240303173554701.png)
+
+缺点是：原来规划好的节点，进行扩容或者缩容就比较麻烦了额，不管扩缩，每次数据变动导致节点有变动，映射关系需要重新进行计算，在服务器个数固定不变时没有问题，如果需要弹性扩容或故障停机的情况下，原来的取模公式就会发生变化：Hash(key)/3会变成Hash(key) /?。此时地址经过取余运算的结果将发生很大变化，根据公式获取的服务器也会变得不可控。
+
+某个redis机器宕机了，由于台数数量变化，会导致hash取余全部数据重新洗牌。
+
+---
+
+**一致性哈希算法分区**
+
+一致性哈希算法在1997年由麻省理工学院中提出的，设计目标是为了解决**分布式缓存数据变动和映射问题**，某个机器宕机了，分母数量改变了，自然取余数不OK了。
+
+提出一致性Hash解决方案。目的是当服务器个数发生变动时，尽量减少影响客户端到服务器的映射关系。
+
+**算法构建一致性哈希环**
+
+一致性哈希算法必然有个hash函数并按照算法产生hash值，这个算法的所有可能哈希值会构成一个全量集，这个集合可以成为一个hash空间[0,2^32-1]，这个是一个线性空间，但是在算法中，我们通过适当的逻辑控制将它首尾相连(0 = 2^32),这样让它逻辑上形成了一个环形空间。
+
+它也是按照使用取模的方法，前面笔记介绍的节点取模法是对节点（服务器）的数量进行取模。而**一致性Hash算法是对2^32取模**，简单来说，**一致性Hash算法将整个哈希值空间组织成一个虚拟的圆环**，如假设某哈希函数H的值空间为0-2^32-1（即哈希值是一个32位无符号整形），整个哈希环如下图：**整个空间按顺时针方向组织**，圆环的正上方的点代表0，0点右侧的第一个点代表1，以此类推，2、3、4、……直到2^32-1，也就是说0点左侧的第一个点代表2^32-1， 0和2^32-1在零点中方向重合，我们把这个由2^32个点组成的圆环称为Hash环。
+
+![image-20240303175124085](pictures/image-20240303175124085.png)
+
+**redis服务器IP节点映射**
+
+将集群中各个IP节点映射到环上的某一个位置。将各个服务器使用Hash进行一个哈希，具体可以选择服务器的IP或主机名作为关键字进行哈希，这样每台机器就能确定其在哈希环上的位置。假如4个节点NodeA、B、C、D，经过IP地址的哈希函数计算(hash(ip))，使用IP地址哈希后在环空间的位置如下：  
+
+![image-20240303175355658](pictures/image-20240303175355658.png)
+
+**key落到服务器的落键规则**
+
+当我们需要存储一个kv键值对时，首先计算key的hash值，hash(key)，将这个key使用相同的函数Hash计算出哈希值并确定此数据在环上的位置，**从此位置沿环顺时针“行走”**，第一台遇到的服务器就是其应该定位到的服务器，并将该键值对存储在该节点上。
+
+如我们有Object A、Object B、Object C、Object D四个数据对象，经过哈希计算后，在环空间上的位置如下：根据一致性Hash算法，数据A会被定为到Node A上，B被定为到Node B上，C被定为到Node C上，D被定为到Node D上。
+
+![image-20240303175448593](pictures/image-20240303175448593.png)
+
+**优点**
+
+**容错性**：假设Node C宕机，可以看到此时对象A、B、D不会受到影响。一般的，在一致性Hash算法中，如果一台服务器不可用，则受影响的数据仅仅是此服务器到其环空间中前一台服务器（即沿着逆时针方向行走遇到的第一台服务器）之间数据，其它不会受到影响。简单说，就是C挂了，受到影响的只是B、C之间的数据且这些数据会转移到D进行存储。
+
+![image-20240303175551197](pictures/image-20240303175551197.png)
+
+**扩展性**：数据量增加了，需要增加一台节点NodeX，X的位置在A和B之间，那收到影响的也就是A到X之间的数据，重新把A到X的数据录入到X上即可，不会导致hash取余全部数据重新洗牌。
+
+![image-20240303175641321](pictures/image-20240303175641321.png)
+
+
+
+**缺点**
+
+**数据倾斜问题**：一致性Hash算法在服务节点太少时，容易因为节点分布不均匀而造成数据倾斜（被缓存的对象大部分集中缓存在某一台服务器上）问题。
+
+![image-20240303175855120](pictures/image-20240303175855120.png)
+
+---
+
+**哈希槽分区**
+
+`HASH_SLOT = CRC16(key) mod 16384`
+
+Redis 集群中内置了 **16384 个哈希槽**，redis 会根据节点数量大致均等的将哈希槽映射到不同的节点。当需要在 Redis 集群中放置一个 key-value时，redis先对key使用crc16算法算出一个结果然后用结果对16384求余数[ CRC16(key) % 16384]，这样每个 key 都会对应一个编号在 0-16383 之间的哈希槽，也就是映射到某个节点上。如下代码，key之A 、B在Node2， key之C落在Node3上
+
+**为什么Redis集群的最大槽数是16387（2^14）个？**
+
+CRC16算法产生的hash值有16bit，该算法可以产生2^16=65536个值。
+
+换句话说值是分布在0~65535之间，有更大的65536不用为什么只用16384就够？
+
+作者在做mod运算的时候，为什么不mod65536，而选择mod16384？
+
+![image-20240303181854583](pictures/image-20240303181854583.png)
+
+**正常的心跳数据包**带有节点的完整配置，可以用幂等方式用旧的节点替换旧节点，以便更新旧的配置。这意味着它们包含原始节点的插槽配置，该节点使用2k的空间和16k的插槽，但是会使用8k的空间（使用65k的插槽）。同时，由于其他设计折衷，Redis集群不太可能扩展到1000个以上的主节点。因此16k处于正确的范围内，以确保每个主机具有足够的插槽，最多可容纳1000个矩阵，但数量足够少，可以轻松地将插槽配置作为原始位图传播。请注意，在小型群集中，位图将难以压缩，因为当N较小时，位图将设置的slot / N位占设置位的很大百分比。
+
+![image-20240303182321468](pictures/image-20240303182321468.png)
+
+1. 如果槽位为65536，发送心跳信息的消息头达8k，发送的心跳包过于庞大。
+
+在消息头中最占空间的是myslots[CLUSTER_SLOTS/8]。 当槽位为65536时，这块的大小是: 65536÷8÷1024=8kb 
+
+在消息头中最占空间的是myslots[CLUSTER_SLOTS/8]。 当槽位为16384时，这块的大小是: 16384÷8÷1024=2kb 
+
+因为每秒钟，redis节点需要发送一定数量的ping消息作为心跳包，如果槽位为65536，这个ping消息的消息头太大了，浪费带宽。
+
+2. redis的集群主节点数量基本不可能超过1000个。
+
+集群节点越多，心跳包的消息体内携带的数据越多。如果节点过1000个，也会导致网络拥堵。因此redis作者不建议redis cluster节点数量超过1000个。 那么，对于节点数在1000以内的redis cluster集群，16384个槽位够用了。没有必要拓展到65536个。
+
+3. 槽位越小，节点少的情况下，压缩比高，容易传输
+
+Redis主节点的配置信息中它所负责的哈希槽是通过一张bitmap的形式来保存的，在传输过程中会对bitmap进行压缩，但是如果bitmap的填充率slots / N很高的话(N表示节点数)，bitmap的压缩率就很低。 如果节点数很少，而哈希槽数量很多的话，bitmap的压缩率就很低。 
+
+## 集群搭建
+
+**3主3从集群配置**
+
+现有三台虚拟机ip分别为：192.168.119.201，192.168.119.202，192.168.119.203。
+
+分别新建文件夹`mkdir -p /myredis/cluster`
+
+`vim /myredis/cluster/redisCluster6380.conf`
+
+```
+bind 0.0.0.0
+daemonize yes
+protected-mode no
+port 6380
+logfile "/myredis/cluster/cluster6380.log"
+pidfile /myredis/cluster6380.pid
+dir /myredis/cluster
+dbfilename dump6380.rdb
+appendonly yes
+appendfilename "appendonly6380.aof"
+requirepass 111111
+masterauth 111111
+ 
+cluster-enabled yes
+cluster-config-file nodes-6380.conf
+cluster-node-timeout 5000
+```
+
+`vim /myredis/cluster/redisCluster6381.conf`
+
+```
+bind 0.0.0.0
+daemonize yes
+protected-mode no
+port 6381
+logfile "/myredis/cluster/cluster6381.log"
+pidfile /myredis/cluster6381.pid
+dir /myredis/cluster
+dbfilename dump6381.rdb
+appendonly yes
+appendfilename "appendonly6381.aof"
+requirepass 111111
+masterauth 111111
+ 
+cluster-enabled yes
+cluster-config-file nodes-6381.conf
+cluster-node-timeout 5000
+```
+
+`redis-server /myredis/cluster/redisCluster6380.conf`
+
+`redis-server /myredis/cluster/redisCluster6381.conf`
+
+**构建主从关系**
+
+其中一台服务器中执行`redis-cli -a 111111 --cluster create --cluster-replicas 1 192.168.119.201:6380 192.168.119.201:6381 192.168.119.202:6380 192.168.119.202:6381 192.168.119.203:6380 192.168.119.203:6381 `
+
+```
+//获取到反馈
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+//其中匹配为
+201:6380 主 202:6381从
+202:6380 主 203:6381从
+203:6380 主 201:6381从
+```
+
+**集群命令**
+
+在201机器中输入命令。
+
+`info replication`
+
+```
+127.0.0.1:6380> info replication
+# Replication
+role:master
+connected_slaves:1
+slave0:ip=192.168.119.202,port=6381,state=online,offset=196,lag=1
+master_failover_state:no-failover
+master_replid:ab2c9a03a6e7107015f3e3922871439c61667122
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:196
+second_repl_offset:-1
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:1
+repl_backlog_histlen:196
+```
+
+`cluster info`
+
+```
+127.0.0.1:6380> cluster info
+cluster_state:ok
+cluster_slots_assigned:16384
+cluster_slots_ok:16384
+cluster_slots_pfail:0
+cluster_slots_fail:0
+cluster_known_nodes:6
+cluster_size:3
+cluster_current_epoch:6
+cluster_my_epoch:1
+cluster_stats_messages_ping_sent:660
+cluster_stats_messages_pong_sent:672
+cluster_stats_messages_sent:1332
+cluster_stats_messages_ping_received:667
+cluster_stats_messages_pong_received:660
+cluster_stats_messages_meet_received:5
+cluster_stats_messages_received:1332
+total_cluster_links_buffer_limit_exceeded:0
+```
+
+`cluster nodes`
+
+```
+127.0.0.1:6380> cluster nodes
+c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380@16380 master - 0 1709462646109 3 connected 5461-10922
+3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380@16380 master - 0 1709462646000 5 connected 10923-16383
+4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380@16380 myself,master - 0 1709462645000 1 connected 0-5460
+ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381@16381 slave c744873f28354f1731948ecb0d436ec54db48119 0 1709462646614 3 connected
+6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381@16381 slave 3e1214f12b513cbf61383f4541eddb99f8e7b197 0 1709462646614 5 connected
+1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381@16381 slave 4108a26e92d914b916b974ce5630f05d860ed695 0 1709462645103 1 connected
+```
+
+## 集群读写
+
+在201机器中输入命令。
+
+`redis-cli -a 111111 -p 6380`
+
+```
+127.0.0.1:6380> set k1 v1
+(error) MOVED 12706 192.168.119.203:6380
+127.0.0.1:6380> set k2 k2
+OK
+127.0.0.1:6380> get k1
+(error) MOVED 12706 192.168.119.203:6380
+127.0.0.1:6380> get k2
+"k2"
+```
+
+防止路由失效加参数-c，`redis-cli -a 111111 -p 6380 -c`
+
+```
+127.0.0.1:6380> set k1 v1
+-> Redirected to slot [12706] located at 192.168.119.203:6380
+OK
+192.168.119.203:6380> set k2 v2
+-> Redirected to slot [449] located at 192.168.119.201:6380
+OK
+192.168.119.201:6380> get k1
+-> Redirected to slot [12706] located at 192.168.119.203:6380
+"v1"
+192.168.119.203:6380> get k2
+-> Redirected to slot [449] located at 192.168.119.201:6380
+"v2"
+```
+
+`CLUSTER KEYSLOT 键名称`：查看某个key该属于对应的槽位值
+
+## 主从容错切换迁移
+
+**在201机器中，关掉6380这个master**
+
+`redis-cli -a 111111 -p 6380  shutdown`
+
+**找到刚才201对应的slave，202:6381中执行**
+
+`redis-cli -a 111111 -p 6381 -c`
+
+发现202:6381已经晋升为Master
+
+```
+127.0.0.1:6381> cluster nodes
+3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380@16380 master - 0 1709463233000 5 connected 10923-16383
+ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381@16381 slave c744873f28354f1731948ecb0d436ec54db48119 0 1709463233386 3 connected
+1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381@16381 myself,master - 0 1709463231000 7 connected 0-5460
+4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380@16380 master,fail - 1709463095599 1709463093000 1 disconnected
+c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380@16380 master - 0 1709463234000 3 connected 5461-10922
+6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381@16381 slave 3e1214f12b513cbf61383f4541eddb99f8e7b197 0 1709463234395 5 connected
+
+127.0.0.1:6381> info replication
+# Replication
+role:master
+connected_slaves:0
+master_failover_state:no-failover
+master_replid:ad0ca1ceff1ce7470354e608d9aa7fb363a80acb
+master_replid2:ab2c9a03a6e7107015f3e3922871439c61667122
+master_repl_offset:1299
+second_repl_offset:1300
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:15
+repl_backlog_histlen:1285
+```
+
+**再次回到201机器，恢复201:6380**
+
+`redis-server /myredis/cluster/redisCluster6380.conf`
+
+`redis-cli -a 111111 -p 6380 -c`
+
+连接上后发现201:6380变成了从库。
+
+```
+127.0.0.1:6380> cluster nodes
+4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380@16380 myself,slave 1e33276dd81cd80ba71a4d485aa700bb332a4d05 0 1709463428000 7 connected
+ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381@16381 slave c744873f28354f1731948ecb0d436ec54db48119 0 1709463430000 3 connected
+1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381@16381 master - 0 1709463430000 7 connected 0-5460
+c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380@16380 master - 0 1709463430975 3 connected 5461-10922
+3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380@16380 master - 0 1709463429566 5 connected 10923-16383
+6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381@16381 slave 3e1214f12b513cbf61383f4541eddb99f8e7b197 0 1709463430000 5 connected
+```
+
+**将201:6380重新变为Master**
+
+在201:6380中执行命令`CLUSTER FAILOVER`，随后发现201:6380重新变为了Master，202:6381变为其Slave
+
+```
+127.0.0.1:6380> CLUSTER FAILOVER
+OK
+127.0.0.1:6380> cluster nodes
+4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380@16380 myself,master - 0 1709463492000 8 connected 0-5460
+ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381@16381 slave c744873f28354f1731948ecb0d436ec54db48119 0 1709463493000 3 connected
+1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381@16381 slave 4108a26e92d914b916b974ce5630f05d860ed695 0 1709463493949 8 connected
+c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380@16380 master - 0 1709463492537 3 connected 5461-10922
+3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380@16380 master - 0 1709463493446 5 connected 10923-16383
+6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381@16381 slave 3e1214f12b513cbf61383f4541eddb99f8e7b197 0 1709463492436 5 connected
+```
+
+## 主从扩容
+
+**现在对Redis集群进行扩容，在201中再增加两个端口6390和6391**
+
+`vim /myredis/cluster/redisCluster6390.conf`
+
+```
+bind 0.0.0.0
+daemonize yes
+protected-mode no
+port 6390
+logfile "/myredis/cluster/cluster6390.log"
+pidfile /myredis/cluster6390.pid
+dir /myredis/cluster
+dbfilename dump6390.rdb
+appendonly yes
+appendfilename "appendonly6390.aof"
+requirepass 111111
+masterauth 111111
+ 
+cluster-enabled yes
+cluster-config-file nodes-6390.conf
+cluster-node-timeout 5000
+```
+
+`vim /myredis/cluster/redisCluster6391.conf`
+
+```
+bind 0.0.0.0
+daemonize yes
+protected-mode no
+port 6391
+logfile "/myredis/cluster/cluster6391.log"
+pidfile /myredis/cluster6391.pid
+dir /myredis/cluster
+dbfilename dump6391.rdb
+appendonly yes
+appendfilename "appendonly6391.aof"
+requirepass 111111
+masterauth 111111
+ 
+cluster-enabled yes
+cluster-config-file nodes-6391.conf
+cluster-node-timeout 5000
+```
+
+`redis-server /myredis/cluster/redisCluster6390.conf`
+
+`redis-server /myredis/cluster/redisCluster6391.conf`
+
+**将新增的6390节点（空槽号）作为Master节点加入原集群**
+
+`redis-cli -a 密码 --cluster add-node 新成员IP地址:6390 集群节点IP地址:6380`
+
+6390 就是将要作为master新增节点
+
+6380 就是原来集群节点里面的领路人，相当于6390拜拜6380的码头从而找到组织加入集群
+
+`redis-cli -a 111111 --cluster add-node 192.168.119.201:6390 192.168.119.201:6380`
+
+```
+[root@louise01 ~]# redis-cli -a 111111 --cluster add-node 192.168.119.201:6390 192.168.119.201:6380
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+>>> Adding node 192.168.119.201:6390 to cluster 192.168.119.201:6380
+>>> Performing Cluster Check (using node 192.168.119.201:6380)
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+>>> Getting functions from cluster
+>>> Send FUNCTION LIST to 192.168.119.201:6390 to verify there is no functions in it
+>>> Send FUNCTION RESTORE to 192.168.119.201:6390
+>>> Send CLUSTER MEET to node 192.168.119.201:6390 to make it join the cluster.
+[OK] New node added correctly.
+```
+
+**查看6390节点情况**
+
+`redis-cli -a 111111 --cluster check 192.168.119.201:6390`
+
+```
+[root@louise01 ~]# redis-cli -a 111111 --cluster check 192.168.119.201:6390
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+192.168.119.201:6390 (73c8236c...) -> 0 keys | 0 slots | 0 slaves.
+192.168.119.203:6380 (3e1214f1...) -> 1 keys | 5461 slots | 1 slaves.
+192.168.119.201:6380 (4108a26e...) -> 1 keys | 5461 slots | 1 slaves.
+192.168.119.202:6380 (c744873f...) -> 0 keys | 5462 slots | 1 slaves.
+[OK] 2 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.119.201:6390)
+M: 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea 192.168.119.201:6390
+   slots: (0 slots) master
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+```
+
+**重新分配槽位（reshard）**
+
+`redis-cli -a 密码 --cluster reshard IP地址:端口号`
+
+`redis-cli -a 111111 --cluster reshard 192.168.119.201:6390`
+
+该截图为分配好以后的，之前的没有截上。
+
+![image-20240303191911919](pictures/image-20240303191911919.png)
+
+`redis-cli -a 111111 --cluster check 192.168.119.201:6390`，查看集群状况
+
+这里可以看到6390被分配了，[0-1364]，[5461-6826]，[10923-12287]的哈希槽。
+
+如果重新分配的话成本过高，所以之前的三个Master都匀出来一部分。
+
+```
+[root@louise01 ~]# redis-cli -a 111111 --cluster check 192.168.119.201:6390
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+192.168.119.201:6390 (73c8236c...) -> 1 keys | 4096 slots | 0 slaves.
+192.168.119.203:6380 (3e1214f1...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.119.201:6380 (4108a26e...) -> 0 keys | 4096 slots | 1 slaves.
+192.168.119.202:6380 (c744873f...) -> 0 keys | 4096 slots | 1 slaves.
+[OK] 2 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.119.201:6390)
+M: 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea 192.168.119.201:6390
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[1365-5460] (4096 slots) master
+   1 additional replica(s)
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+```
+
+**将6391作为6390的Slave节点添加进集群**
+
+`redis-cli -a 密码 --cluster add-node ip:新slave端口 ip:新master端口 --cluster-slave --cluster-master-id 新主机节点ID`
+
+`redis-cli -a 111111 --cluster add-node 192.168.119.201:6391 192.168.119.201:6390 --cluster-slave --cluster-master-id 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea`
+
+`redis-cli -a 111111 --cluster check 192.168.119.201:6390`：再次查看集群情况
+
+```
+[root@louise01 ~]# redis-cli -a 111111 --cluster check 192.168.119.201:6390
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+192.168.119.201:6390 (73c8236c...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.119.203:6380 (3e1214f1...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.119.201:6380 (4108a26e...) -> 0 keys | 4096 slots | 1 slaves.
+192.168.119.202:6380 (c744873f...) -> 0 keys | 4096 slots | 1 slaves.
+[OK] 2 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.119.201:6390)
+M: 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea 192.168.119.201:6390
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+   1 additional replica(s)
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 5a355fd817922535c14fe858adef76b98c8986c1 192.168.119.201:6391
+   slots: (0 slots) slave
+   replicates 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[1365-5460] (4096 slots) master
+   1 additional replica(s)
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+```
+
+## 主从缩容
+
+**将201中6391节点删除**
+
+`redis-cli -a 密码 --cluster del-node ip:端口 节点ID`
+
+`redis-cli -a 111111 --cluster del-node 192.168.119.201:6391 5a355fd817922535c14fe858adef76b98c8986c1`
+
+`redis-cli -a 111111 --cluster check 192.168.119.201:6390`，可以看到6391已经被删除。
+
+```
+[root@louise01 ~]# redis-cli -a 111111 --cluster check 192.168.119.201:6390
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+192.168.119.201:6390 (73c8236c...) -> 1 keys | 4096 slots | 0 slaves.
+192.168.119.203:6380 (3e1214f1...) -> 1 keys | 4096 slots | 1 slaves.
+192.168.119.201:6380 (4108a26e...) -> 0 keys | 4096 slots | 1 slaves.
+192.168.119.202:6380 (c744873f...) -> 0 keys | 4096 slots | 1 slaves.
+[OK] 2 keys in 4 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.119.201:6390)
+M: 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea 192.168.119.201:6390
+   slots:[0-1364],[5461-6826],[10923-12287] (4096 slots) master
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[1365-5460] (4096 slots) master
+   1 additional replica(s)
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+```
+
+**将201:6390的槽位清空**
+
+`redis-cli -a 密码 --cluster reshard IP地址:端口号`
+
+`redis-cli -a 111111 --cluster reshard 192.168.119.201:6380`
+
+本次案例中将201:6390中的所有哈希槽都归还给201:6380。
+
+![image-20240303193904350](pictures/image-20240303193904350.png)
+
+**检查集群情况**
+
+`redis-cli -a 111111 --cluster check 192.168.119.201:6380`
+
+发现201:6390变为了201:6380的Slave
+
+```
+[root@louise01 ~]# redis-cli -a 111111 --cluster check 192.168.119.201:6380
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+192.168.119.201:6380 (4108a26e...) -> 1 keys | 8192 slots | 2 slaves.
+192.168.119.202:6380 (c744873f...) -> 0 keys | 4096 slots | 1 slaves.
+192.168.119.203:6380 (3e1214f1...) -> 1 keys | 4096 slots | 1 slaves.
+[OK] 2 keys in 3 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.119.201:6380)
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[0-6826],[10923-12287] (8192 slots) master
+   2 additional replica(s)
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+S: 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea 192.168.119.201:6390
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+```
+
+**删除201:6390节点**
+
+`redis-cli -a 密码 --cluster del-node ip:端口 节点ID`
+
+`redis-cli -a 111111 --cluster del-node 192.168.119.201:6390 73c8236cf99a3ec37f526ba40ceb9d04e7e0dfea`
+
+`redis-cli -a 111111 --cluster check 192.168.119.201:6380`
+
+```
+[root@louise01 ~]# redis-cli -a 111111 --cluster check 192.168.119.201:6380
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+192.168.119.201:6380 (4108a26e...) -> 1 keys | 8192 slots | 1 slaves.
+192.168.119.202:6380 (c744873f...) -> 0 keys | 4096 slots | 1 slaves.
+192.168.119.203:6380 (3e1214f1...) -> 1 keys | 4096 slots | 1 slaves.
+[OK] 2 keys in 3 masters.
+0.00 keys per slot on average.
+>>> Performing Cluster Check (using node 192.168.119.201:6380)
+M: 4108a26e92d914b916b974ce5630f05d860ed695 192.168.119.201:6380
+   slots:[0-6826],[10923-12287] (8192 slots) master
+   1 additional replica(s)
+S: ef96fddce63614df227ad6d935128523c8936079 192.168.119.203:6381
+   slots: (0 slots) slave
+   replicates c744873f28354f1731948ecb0d436ec54db48119
+S: 1e33276dd81cd80ba71a4d485aa700bb332a4d05 192.168.119.202:6381
+   slots: (0 slots) slave
+   replicates 4108a26e92d914b916b974ce5630f05d860ed695
+M: c744873f28354f1731948ecb0d436ec54db48119 192.168.119.202:6380
+   slots:[6827-10922] (4096 slots) master
+   1 additional replica(s)
+M: 3e1214f12b513cbf61383f4541eddb99f8e7b197 192.168.119.203:6380
+   slots:[12288-16383] (4096 slots) master
+   1 additional replica(s)
+S: 6629cf0eb83f7b5efb8f01e9732150858fad8563 192.168.119.201:6381
+   slots: (0 slots) slave
+   replicates 3e1214f12b513cbf61383f4541eddb99f8e7b197
+```
+
+## 集群常用操作命令和CRC16算法分析
+
+**不在同一个slot槽位下的多键操作支持不好，通识占位符登场**
+
+```
+//不在同一个slot槽位下的键值无法使用mset、mget等多键操作
+[root@louise01 ~]# redis-cli -a 111111 -p 6380 -c
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+127.0.0.1:6380> set k1 v1
+-> Redirected to slot [12706] located at 192.168.119.203:6380
+OK
+192.168.119.203:6380> set k2 v2
+-> Redirected to slot [449] located at 192.168.119.201:6380
+OK
+192.168.119.201:6380> set k3 v3
+OK
+192.168.119.201:6380> mget k1 k2 k3
+(error) CROSSSLOT Keys in request don't hash to the same slot
+192.168.119.201:6380> mset k1 v11 k2 v22 k3 v33
+(error) CROSSSLOT Keys in request don't hash to the same slot
+
+//可以通过{}来定义同一个组的概念，使key中{}内相同内容的键值对放到一个slot槽位去，类似k1k2k3都映射为x，自然槽位一样
+192.168.119.201:6380> mset k1{x} v11 k2{x} v22 k3{x} v33
+-> Redirected to slot [16287] located at 192.168.119.203:6380
+OK
+192.168.119.203:6380> mget k1{x} k2{x} k3{x}
+1) "v11"
+2) "v22"
+3) "v33"
+```
+
+**CRC16算法**
+
+![image-20240303195107520](pictures/image-20240303195107520.png)
+
+**常用命令**
+cluster-require-full-coverage 配置： 默认值 yes , 即需要集群完整性，方可对外提供服务 通常情况，如果这3个小集群中，任何一个（1主1从）挂了，你这个集群对外可提供的数据只有2/3了， 整个集群是不完整的， redis 默认在这种情况下，是不会对外提供服务的。
+
+CLUSTER KEYSLOT 键名称：该键应该存在哪个槽位上
+
+CLUSTER COUNTKEYSINSLOT 槽位数字编号：1，该槽位被占用。0，该槽位没占用。
 
 # **Redis配置文件小结**
 
@@ -1495,10 +2401,275 @@ n
 | replicaof 主库ip 主库端口        | 主从模式，从库用来配置主库ip和端口                           |
 | repl-ping-replica-period 10      | 主从模式，master发送ping包的周期                             |
 
+# SpringBoot集成Redis
+
+## **Jedis**
+
+Jedis Client是Redis官网推荐的一个面向java客户端，库文件实现了对各类API进行封装调用。
+
+```
+<!--web启动依赖-->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+
+<!-- test -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-test</artifactId>
+</dependency>
+
+<!-- lombok -->
+<dependency>
+    <groupId>org.projectlombok</groupId>
+    <artifactId>lombok</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>redis.clients</groupId>
+    <artifactId>jedis</artifactId>
+    <version>4.3.1</version>
+</dependency>
+```
+
+```
+import lombok.extern.slf4j.Slf4j;
+import redis.clients.jedis.Jedis;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+@Slf4j
+public class JedisTest {
+    public static void main(String[] args) {
+        Jedis jedis = new Jedis("192.168.119.202", 6379);
+        jedis.auth("159753");
+
+        //string
+        jedis.set("k1", "v1");
+        System.out.println(jedis.get("k1"));
+
+        //list
+        System.out.println();
+        jedis.lpush("l1", "l1", "l2");
+        List<String> l1 = jedis.lrange("l1", 0, -1);
+        for (String value : l1) {
+            System.out.println(value);
+        }
+
+        //hash
+        System.out.println();
+        jedis.hset("h1", "m", "n");
+        jedis.hset("h1", "k", "v");
+        Map<String, String> h1 = jedis.hgetAll("h1");
+        for (Map.Entry<String, String> entry : h1.entrySet()) {
+            System.out.println(entry.getKey() + ":" + entry.getValue());
+        }
+
+        //set
+        System.out.println();
+        jedis.sadd("s1", "v1", "v2", "v3");
+        System.out.println(jedis.spop("s1"));
+
+        //zSet
+        System.out.println();
+        jedis.zadd("z1", 100, "v1");
+        List<String> z1 = jedis.zrange("z1", 0, -1);
+        for (String value : z1) {
+            System.out.println(value);
+        }
+
+        System.out.println();
+        Set<String> keys = jedis.keys("*");
+        for (String key : keys) {
+            System.out.println(key);
+        }
+    }
+}
+```
+
+## **Lettuce**
+
+Lettuce是一个Redis的Java驱动包。
+
+SpringBoot2.0之后默认使用的是Lettuce这个客户端连接Redis。Jedis客户端连接Redis服务器的时候，每个线程都要拿自己创建的Jedis实例去连接Redis，反复创建Jedis连接，而且线程也是不安全的。
+
+Lettuce底层使用的是Netty，当有多个线程都需要连接Redis的时候，可以保证只创建一个Lettuce连接，所有线程共享使用一个连接，并且线程是安全的。
+
+```
+<dependency>
+    <groupId>io.lettuce</groupId>
+    <artifactId>lettuce-core</artifactId>
+    <version>6.2.1.RELEASE</version>
+</dependency>
+```
+
+```
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.RedisURI;
+import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.api.sync.RedisCommands;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
+
+@Slf4j
+public class LettuceTest {
+    public static void main(String[] args) {
+        //使用构建器 RedisURI.builder
+        RedisURI uri = RedisURI.Builder
+                .redis("192.168.119.202")
+                .withPort(6379)
+                .withAuthentication("default", "159753")
+                .build();
+        //创建连接客户端
+        RedisClient client = RedisClient.create(uri);
+        StatefulRedisConnection<String, String> conn = client.connect();
+        //操作命令api
+        RedisCommands<String, String> commands = conn.sync();
+
+        //string
+        commands.set("k1", "v1");
+        System.out.println(commands.get("k1"));
+
+        //keys
+        List<String> list = commands.keys("*");
+        for (String s : list) {
+            log.info("key:{}", s);
+        }
+
+        //关闭
+        conn.close();
+        client.shutdown();
+    }
+}
+```
+
+## **RedisTemplate**
+
+**单机**
+
+pom
+
+```
+<!--SpringBoot与Redis整合依赖-->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+```
+
+config
+
+```
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+@SpringBootApplication
+public class RedisConfig {
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory lettuceConnectionFactory)
+    {
+        RedisTemplate<String,Object> redisTemplate = new RedisTemplate<>();
+
+        redisTemplate.setConnectionFactory(lettuceConnectionFactory);
+        //设置key序列化方式string
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        //设置value的序列化方式json，使用GenericJackson2JsonRedisSerializer替换默认序列化
+        redisTemplate.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+        redisTemplate.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+
+        redisTemplate.afterPropertiesSet();
+
+        return redisTemplate;
+    }
+}
+```
+
+controller
+
+```
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.annotation.Resource;
+
+@RestController
+public class TestController {
+    @Resource
+    TestService testService;
+
+    @GetMapping("test")
+    public String test(){
+        return testService.setAndGet();
+    }
+}
+```
+
+service
+
+```
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
+
+@Service
+public class TestService {
+
+    @Resource
+    RedisTemplate<String, String> redisTemplate;
+
+    public String setAndGet() {
+        ValueOperations<String, String> forValue = redisTemplate.opsForValue();
+        forValue.set("k1","v11");
+        return forValue.get("k1");
+    }
+}
+
+```
+
+**集群**
+
+yml
+
+```
+spring:
+  redis:
+    password: 111111
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+      cluster:
+      	#支持集群拓扑动态感应刷新,自适应拓扑刷新是否使用所有可用的更新，默认false关闭
+        refresh:
+          adaptive: true
+          period: 2000
+    cluster:
+      nodes: 192.168.119.201:6380,192.168.119.201:6381,192.168.119.202:6380,192.168.119.202:6381,192.168.119.203:6380,192.168.119.203:6381
+```
+
+
+
 # String 还是 Hash 存储对象数据更好呢？
 
 - String 存储的是序列化后的对象数据，存放的是整个对象。Hash 是对对象的每个字段单独存储，可以获取部分字段的信息，也可以修改或者添加部分字段，节省网络流量。如果对象中某些字段需要经常变动或者经常需要单独查询对象中的个别字段信息，Hash 就非常适合。
 - String 存储相对来说更加节省内存，缓存相同数量的对象数据，String 消耗的内存约是 Hash 的一半。并且，存储具有多层嵌套的对象时也方便很多。如果系统对性能和资源消耗非常敏感的话，String 就非常适合。
 
 在绝大部分情况，我们建议使用 **String** 来存储对象数据即可
+
+# Redis单线程VS多线程TODO
 
