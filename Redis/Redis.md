@@ -4,9 +4,9 @@
 
 为了满足不同的业务场景，Redis 内置了多种数据类型实现（比如 **String、List、Hash、Set、Sorted Set、Bitmap、HyperLogLog、GEO**）。
 
-它内置了**复制（Replication）**、**LUA 脚本（Lua scripting）**、**LRU 缓存淘汰（LRU eviction）**、**事务（Transactions）**、**发布/订阅**、**流技术**和不同级别的**磁盘持久化（persistence）**功能。
+它内置了**复制（Replication）**、**LUA 脚本（Lua scripting）**、**LRU 缓存淘汰（LRU eviction）**、**事务（Transactions）**、**发布/订阅**、**流技术**和不同级别的**磁盘持久化**（persistence）功能。
 
-并提供了**主从模式**、 **Redis Sentinel（哨兵）**和 **Redis Cluster（集群）**保证缓存的高可用性（High availability）。
+并提供了**主从模式**、 **Redis Sentinel**（哨兵）和 **Redis Cluster**（集群）保证缓存的高可用性（High availability）。
 
 [英文官网 https://redis.io/](https://redis.io/)
 
@@ -3087,7 +3087,7 @@ GeoResults<RedisGeoCommands.GeoLocation<String>> geoResults= this.redisTemplate.
 
 - 安全连接网址，全球上10亿的网址判断
 
-## BloomFilter代码
+## 布隆过滤器代码
 
 ```
 <dependency>
@@ -3194,4 +3194,4 @@ redis缓存集群实现高可用。
 
 **方案2：Google布隆过滤器Guava解决缓存穿透**
 
-[布隆过滤器](#BloomFilter代码)
+[布隆过滤器](#布隆过滤器代码)
