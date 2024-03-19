@@ -3141,6 +3141,8 @@ public static void main(String[] args) {
 
 # 缓存预热、缓存雪崩、缓存击穿、缓存穿透
 
+![image-20240313221809809](pictures/image-20240313221809809.png)
+
 ## 面试题
 
 - 缓存预热、雪崩、穿透、击穿分别是什么？你遇到过那几个情况？
@@ -3195,3 +3197,831 @@ redis缓存集群实现高可用。
 **方案2：Google布隆过滤器Guava解决缓存穿透**
 
 [布隆过滤器](#布隆过滤器代码)
+
+## 缓存击穿
+
+**是什么**
+
+大量的请求同时查询一个 key 时，此时这个key正好失效了，就会导致大量的请求都打到数据库上面去。
+
+简单说就是**热点key突然失效**了，暴打mysql。
+
+**解决**
+
+**方案1：差异失效时间，对于访问频繁的热点key，干脆就不设置过期时间。**
+
+**方案2：互斥更新，采用双检加锁策略。**
+
+多个线程同时去查询数据库的这条数据，那么我们可以在第一个查询数据的请求上使用一个 互斥锁来锁住它。
+
+```
+public String get(String key) {
+    //查询缓存
+    String value = redis.get(key);
+    if (value != null) {
+        return value;
+    } else {
+        //缓存不存在则加锁
+        synchronized (Test.class) {
+            //再次查询redis 因为可能有其他线程提前进来查询了数据库
+            value = redis.get(key);
+            if (value == null) {
+                //二次查询redis 查询不到说明是首次进入查询数据库操作
+                value = dao.get(key);
+                //数据缓存
+                redis.setnx(key, value, time);
+            }
+            return value;
+        }
+    }
+}
+```
+
+# 手写Redis分布式锁
+
+## 面试题
+
+- Redis除了拿来做缓存，你还见过基于Redis的什么用法？
+
+数据共享，分布式Session。
+
+分布式锁
+
+全局ID：string自增
+
+位统计：bitmap
+
+购物车：string，hash
+
+轻量级消息队列：list，stream
+
+抽奖：set
+
+点赞、签到、打卡：bitmap
+
+差集交集并集，用户关注、可能认识的人，推荐模型：set
+
+热点新闻、热搜排行榜：zset
+
+- Redis 做分布式锁的时候有需要注意的问题？
+- 你们公司自己实现的分布式锁是否用的setnx命令实现？这个是最合适的吗？你如何考虑分布式锁的可重入问题？
+- 如果是 Redis 是单点部署的，会带来什么问题？那你准备怎么解决单点问题呢？
+- Redis集群模式下，比如主从模式，CAP方面有没有什么问题呢？
+- 那你简单的介绍一下 Redlock 吧？你简历上写redisson，你谈谈
+- Redis分布式锁如何续期？看门狗知道吗？
+
+## 靠谱的分布式锁具备的特性
+
+**独占性**：OnlyOne，任何时刻只能有且仅有一个线程持有
+
+**高可用**：若redis集群环境下，不能因为某一个节点挂了而出现获取锁和释放锁失败的情况。高并发请求下，依旧性能OK
+
+防死锁：杜绝死锁，必须有超时控制机制或者撤销操作，有个兜底终止跳出方案
+
+不乱抢：防止张冠李戴，不能私下unlock别人的锁，只能自己加锁自己释放，自己约的锁含着泪也要自己解
+
+**重入性**：同一个节点的同一个线程如果获得锁之后，它也可以再次获取这个锁。
+
+## 手写分布式锁
+
+核心命令 set NX
+
+`set key value [EX seconds] [PX milliseconds] [NX|XX]`
+
+EX：过期时间，单位秒
+
+PX：过期时间，单位毫秒
+
+NX：当key不存在的时候才能创建key，效果等同于setnx
+
+XX：当key存在时，覆盖
+
+---
+
+如果我们要手写一个Redis分布式，需要经过一些思考。
+
+### **V1使用递归来实现重试机制**
+
+```
+    public String v1(){
+
+        String key = "redisLock";
+
+        //uuid 用来作为自己调用的唯一标识
+        String uuid = UUID.randomUUID().toString();
+
+        //set nx
+        Boolean ifAbsent = stringRedisTemplate.opsForValue().setIfAbsent(key, uuid);
+        while (Boolean.FALSE.equals(ifAbsent)){
+            v1();
+        }
+
+        try {
+            //do something
+        } finally {
+            stringRedisTemplate.delete(key);
+        }
+
+        return "success";
+    }
+```
+
+存在问题：容易StackOverflowError，再进一步改善。
+
+### **V2使用循环来实现重试机制**
+
+```
+    public String v2(){
+
+        String key = "redisLock";
+
+        //uuid 用来作为自己调用的唯一标识
+        String uuid = UUID.randomUUID().toString();
+
+        //set nx
+        while(Boolean.FALSE.equals(stringRedisTemplate.opsForValue().setIfAbsent(key, uuid))){
+            try {
+                //使用while来实现 类似CAS自旋
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        try {
+            //do something
+        } finally {
+            stringRedisTemplate.delete(key);
+        }
+
+        return "success";
+    }
+```
+
+存在问题：如果宕机等原因，导致不会走到delete，会导致一直锁住
+
+### **V3添加超时时长**
+
+`stringRedisTemplate.opsForValue().setIfAbsent(key, uuid,30L, TimeUnit.SECONDS)`
+
+存在问题：实际业务中处理时间如果超过了默认的过期时间，就会导致删除别人的锁。
+
+### **V4防止key误删除**
+
+判断如果是自己的key再进行删除
+
+```
+        try {
+            //do something
+        } finally {
+        	//自己只能删除自己的锁，不误删他人的
+            if(uuid.equals(stringRedisTemplate.opsForValue().get(key))){
+                stringRedisTemplate.delete(key);
+            }
+        }
+```
+
+存在问题：if的判断与delete不是原子性操作。
+
+### Lua脚本
+
+[Lua脚本 https://redis.io/docs/reference/patterns/distributed-locks/](https://redis.io/docs/reference/patterns/distributed-locks/)
+
+![image-20240317202447263](pictures/image-20240317202447263.png)
+
+Redis调用Lua脚本通过eval命令保证代码执行的**原子性**，直接用return返回脚本执行后的结果值。
+
+语法：`eval luascript numkeys [key [key ...]] [arg [arg ...]]`
+
+**Lua脚本入门**
+
+hello lua
+
+```
+> EVAL "return 'hello lua'" 0
+hello lua
+```
+
+set k1 v1 get k1
+
+```
+> EVAL " redis.call('set','k1','v1')  return redis.call('get','k1') " 0
+v1
+```
+
+mset
+
+```
+> EVAL " return redis.call('mset',KEYS[1],ARGV[1],KEYS[2],ARGV[2]) " 2 k2 k3 v2 v3
+OK
+> get k2
+v2
+> get k3
+v3
+```
+
+条件判断语句
+
+```
+if 布尔条件 then 业务代码
+elseif 布尔条件 then 业务代码
+else 业务代码
+end
+
+> EVAL "if redis.call('get','k1') == 'v1' then return 1 else return 0 end" 0
+1
+```
+
+模拟分布式锁
+
+```
+> set redisLock 112233
+OK
+> get redisLock
+112233
+> EVAL " if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end " 1 redisLock 112233
+1
+> EVAL " if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end " 1 redisLock 112233
+0
+```
+
+### **V5使用Lua脚本保证原子性**
+
+```
+String luaScript = "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end";
+stringRedisTemplate.execute(new DefaultRedisScript<>(luaScript,Boolean.class), Collections.singletonList(key),uuid);
+```
+
+存在问题：锁不可重入。
+
+### **V6可重入锁**
+
+可重入锁：一个线程中的多个流程可以获取同一把锁，持有这把同步锁可以再次进入。
+
+**Synchronized可重入**
+
+默认是可重入锁。
+
+每个锁对象拥有一个锁计数器和一个指向持有该锁的线程的指针。
+
+当执行monitorenter时，如果目标锁对象的计数器为零，那么说明它没有被其他线程所持有，Java虚拟机会将该锁对象的持有线程设置为当前线程，并且将其计数器加1。
+
+在目标锁对象的计数器不为零的情况下，如果锁对象的持有线程是当前线程，那么 Java 虚拟机可以将其计数器加1，否则需要等待，直至持有线程释放该锁。
+
+当执行monitorexit时，Java虚拟机则需将锁对象的计数器减1。计数器为零代表锁已被释放。
+
+**Lock可重入**
+
+使用ReentrantLock，可重入lock多少次就要unlock多少次。
+
+**Redis实现可重入**
+
+如果要添加次数来记录，String类型已经不满足需求，需要用Hash来实现。
+
+加锁
+
+```
+//如果redis中没有锁 或 自己持有锁 进行自增
+if redis.call('exists',KEYS[1]) == 0 or redis.call('hexists',KEYS[1],ARGV[1]) == 1 then
+ redis.call('hincrby',KEYS[1],ARGV[1],1)
+ redis.call('expire',KEYS[1],30)
+ return 1
+else
+ return 0
+end
+```
+
+释放锁
+
+```
+if redis.call('hexists',KEYS[1],ARGV[1]) == 0 then
+ return nil
+elseif redis.call('hincrby',KEYS[1],ARGV[1],-1) == 0 then
+ return redis.call('del',KEYS[1])
+else
+ return 0
+end
+```
+
+**架构设计**
+
+使用redisLockFactory来获取锁，redisLock来加锁
+
+```
+    @Resource
+    RedisLockFactory redisLockFactory;
+
+    @GetMapping("v6")
+    public String v6() throws InterruptedException {
+        RedisLock redisLock = redisLockFactory.getRedisLock("redisLock");
+
+        redisLock.lock();
+
+        redisLock.lock();
+
+        Thread.sleep(3000);
+
+        redisLock.unlock();
+
+        redisLock.unlock();
+        return "success";
+    }
+```
+
+RedisLockFactory
+
+```
+@Component
+public class RedisLockFactory {
+
+    @Resource
+    StringRedisTemplate stringRedisTemplate;
+
+    static final ThreadLocal<String> REDIS_LOCAL = new ThreadLocal<>();
+
+    public RedisLock getRedisLock(String key) {
+        if (REDIS_LOCAL.get() == null) {
+            REDIS_LOCAL.set(UUID.randomUUID().toString() + ":" + Thread.currentThread().getId());
+        }
+        return new RedisLock(key, stringRedisTemplate, REDIS_LOCAL);
+    }
+}
+```
+
+RedisLock
+
+```
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+
+import java.util.Collections;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+
+public class RedisLock implements Lock {
+
+    private final String key;
+
+    private final StringRedisTemplate stringRedisTemplate;
+
+    private final ThreadLocal<String> REDIS_LOCAL;
+
+    private final long expireTime = 30L;
+
+    public RedisLock(String key, StringRedisTemplate stringRedisTemplate, ThreadLocal<String> REDIS_LOCAL) {
+        this.key = key;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.REDIS_LOCAL = REDIS_LOCAL;
+    }
+
+    @Override
+    public void lock() {
+        tryLock();
+    }
+
+    @Override
+    public boolean tryLock() {
+        return tryLock(expireTime, TimeUnit.SECONDS);
+    }
+
+    @Override
+    public boolean tryLock(long time, TimeUnit unit) {
+        //案例都默认用秒
+        String lockScript = "if redis.call('exists',KEYS[1]) == 0 or redis.call('hexists',KEYS[1],ARGV[1]) == 1 then " +
+                "redis.call('hincrby',KEYS[1],ARGV[1],1) " +
+                "redis.call('expire',KEYS[1],ARGV[2]) " +
+                "return 1 " +
+                "else " +
+                "return 0 " +
+                "end";
+        while (Boolean.FALSE.equals(stringRedisTemplate.execute(new DefaultRedisScript<>(lockScript, Boolean.class), Collections.singletonList(key), REDIS_LOCAL.get(), String.valueOf(time)))) {
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        System.out.println(REDIS_LOCAL.get() + " lock");
+        return true;
+    }
+
+    @Override
+    public void unlock() {
+        String unlockScript =
+                "if redis.call('HEXISTS',KEYS[1],ARGV[1]) == 0 then " +
+                        "return nil " +
+                        "elseif redis.call('HINCRBY',KEYS[1],ARGV[1],-1) == 0 then " +
+                        "return redis.call('del',KEYS[1]) " +
+                        "else " +
+                        "return 0 " +
+                        "end";
+        Long execute = stringRedisTemplate.execute(new DefaultRedisScript<>(unlockScript, Long.class), Collections.singletonList(key), REDIS_LOCAL.get());
+        if(execute == null){
+            return;
+        }
+        System.out.println(REDIS_LOCAL.get() + " unlock");
+        if(execute == 1){
+            REDIS_LOCAL.remove();
+        }
+    }
+
+	//案例中暂时用不到
+    @Override
+    public void lockInterruptibly() throws InterruptedException {
+
+    }
+
+	//案例中暂时用不到
+    @Override
+    public Condition newCondition() {
+        return null;
+    }
+}
+```
+
+### V7自动续费
+
+使用lua脚本加钟
+
+```
+if redis.call('HEXISTS',KEYS[1],ARGV[1]) == 1 then
+  return redis.call('expire',KEYS[1],ARGV[2])
+else
+  return 0
+end
+```
+
+代码实现
+
+在进行lock方法后，新起一个定时器来增加时长
+
+```
+    @Override
+    public boolean tryLock(long time, TimeUnit unit) {
+        //案例都默认用秒
+        String lockScript = "if redis.call('exists',KEYS[1]) == 0 or redis.call('hexists',KEYS[1],ARGV[1]) == 1 then " +
+                "redis.call('hincrby',KEYS[1],ARGV[1],1) " +
+                "redis.call('expire',KEYS[1],ARGV[2]) " +
+                "return 1 " +
+                "else " +
+                "return 0 " +
+                "end";
+        while (Boolean.FALSE.equals(stringRedisTemplate.execute(new DefaultRedisScript<>(lockScript, Boolean.class), Collections.singletonList(key), REDIS_LOCAL.get(), String.valueOf(time)))) {
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        System.out.println(REDIS_LOCAL.get() + " lock");
+        //加钟
+        addTime(REDIS_LOCAL.get());
+        return true;
+    }
+    
+    private void addTime(String uuid) {
+        new Timer().schedule(new TimerTask() {
+            @Override
+            public void run() {
+                String addTimeScript = "if redis.call('HEXISTS',KEYS[1],ARGV[1]) == 1 then " +
+                        "return redis.call('expire',KEYS[1],ARGV[2]) " +
+                        "else " +
+                        "return 0 " +
+                        "end";
+
+                if (Boolean.TRUE.equals(stringRedisTemplate.execute(new DefaultRedisScript<>(addTimeScript, Boolean.class), Collections.singletonList(key), uuid, String.valueOf(expireTime)))) {
+                    System.out.println(uuid + " add time");
+                    addTime(uuid);
+                }
+            }
+        }, (expireTime * 1000) / 3);
+    }
+```
+
+进行测试
+
+在其中睡眠100秒，测试是否自动续时
+
+```
+    @GetMapping("v7")
+    public String v7() throws InterruptedException {
+        RedisLock redisLock = redisLockFactory.getRedisLock("redisLock");
+
+        redisLock.lock();
+
+        redisLock.lock();
+
+        Thread.sleep(100000);
+
+        redisLock.unlock();
+
+        redisLock.unlock();
+        return "success";
+    }
+```
+
+### 考点总结
+
+1. 按照 JUC 里面的 java.util.concurrent.locks.Lock 接口规范来写
+2. lock() 加锁关键逻辑
+
+加锁：使用 Hash 数据结构给指定 key 的指定 value 自增加一，**value 采用 uuid:线程id**。为避免死锁，**给定超时时间**。
+
+自旋：如果锁存在，就进入自旋等待直到获取锁。
+
+续期：在后台起一个定时线程来实现看门狗机制，**超时时间/3**，判断自己的 key 是否还存在，如果存在进行续期。
+
+3. unlock() 解锁关键逻辑
+
+解锁：每次解锁对自己的 key 进行自减，如果自减到0将key进行删除。
+
+# Redlock算法和底层源码分析
+
+为什么会引入Redlock算法呢？
+
+上面手写的Redis分布式锁，会出现**单点故障问题**。
+
+集群模式使用前面手写的分布式锁，如果向某台 Master 进行写入操作，如果 **Master 宕机**，因为**Redis的复制是异步的**，Slave有概率会出现**还没有同步分布式锁**。
+
+## Redlock算法
+
+https://redis.io/docs/manual/patterns/distributed-locks/
+
+Redlock算法，用来实现**基于多个实例的**分布式锁。
+
+锁变量**由多个Master实例维护**，即使有实例发生了故障，锁变量仍然是存在的，客户端还是可以完成锁操作。
+
+Redlock算法是实现高可靠分布式锁的一种有效解决方案，可以在实际开发中使用。
+
+![image-20240318230955315](pictures/image-20240318230955315.png)
+
+该方案也是基于（set 加锁、Lua 脚本解锁）进行改良的，所以redis之父antirez 只描述了差异的地方，大致方案如下。
+
+假设我们有N个Redis主节点，例如 N = 5这些节点是完全独立的，我们不使用复制或任何其他隐式协调系统，为了取到锁客户端执行以下操作：
+
+1. 获取当前时间，以毫秒为单位；
+2. 依次尝试从5个实例，使用相同的 key 和随机值（例如 UUID）获取锁。当向Redis 请求获取锁时，客户端应该设置一个超时时间，这个超时时间应该小于锁的失效时间。例如你的锁自动失效时间为 10 秒，则超时时间应该在 5-50 毫秒之间。这样可以防止客户端在试图与一个宕机的 Redis 节点对话时长时间处于阻塞状态。如果一个实例不可用，客户端应该尽快尝试去另外一个 Redis 实例请求获取锁；
+3. 客户端通过当前时间减去步骤 1 记录的时间来计算获取锁使用的时间。当且仅当从大多数（N/2+1，这里是 3 个节点）的 Redis 节点都取到锁，并且获取锁使用的时间小于锁失效时间时，锁才算获取成功；
+4. 如果取到了锁，其真正有效时间等于初始有效时间减去获取锁所使用的时间（步骤 3 计算的结果）。
+5. 如果由于某些原因未能获得锁（无法在至少 N/2 + 1 个 Redis 实例获取锁、或获取锁的时间超过了有效时间），客户端应该在所有的 Redis 实例上进行解锁（即便某些Redis实例根本就没有加锁成功，防止某些节点获取到锁但是客户端没有得到响应而导致接下来的一段时间不能被重新获取锁）。
+
+---
+
+该方案为了解决数据不一致的问题，**直接舍弃了异步复制只使用 Master 节点**，同时由于**舍弃了 Slave**，为了保证可用性，引入了 N 个节点，官方建议是 5。
+
+客户端只有在满足下面的这两个条件时，才能认为是加锁成功。
+
+条件1：客户端从**超过半数**（大于等于N/2+1）**的Redis实例上成功获取到了锁**；
+
+条件2：客户端获取锁的总耗时没有超过锁的有效时间。
+
+---
+
+**容错公式**
+
+C：Consistency（一致性）
+
+A：Availability（可用性）
+
+P：Partition tolerance（分区容忍性）
+
+Redis只支持AP，为了解决CP的风险，采用N个节点，N为奇数。
+
+为什么是奇数？ N = 2X + 1  (N是最终部署机器数，X是容错机器数)
+
+**什么是容错？**
+
+失败了多少个机器实例后我还是可以容忍的，所谓的容忍就是数据一致性还是可以Ok的，CP数据一致性还是可以满足。
+
+在集群环境中，redis失败1台，可接受。2X+1 = 2 * 1+1 =3，部署3台，死了1个剩下2个可以正常工作，那就部署3台。
+
+在集群环境中，redis失败2台，可接受。2X+1 = 2 * 2+1 =5，部署5台，死了2个剩下3个可以正常工作，那就部署5台。
+
+**为什么是奇数？**
+
+最少的机器，最多的产出效果
+
+在集群环境中，redis失败1台，可接受。2N+2= 2 * 1+2 =4，部署4台。
+
+在集群环境中，redis失败2台，可接受。2N+2 = 2 * 2+2 =6，部署6台
+
+## Redisson
+
+Redlock的落地实现方案，Redisson。
+
+[Redisson 官网 https://redisson.org/](https://redisson.org/)
+
+[Redisson Github](https://github.com/redisson/redisson/wiki/%E7%9B%AE%E5%BD%95)
+
+[Redisson 解决分布式锁 ](https://github.com/redisson/redisson/wiki/8.-Distributed-locks-and-synchronizers)
+
+[Redisson 使用 ](https://github.com/redisson/redisson/wiki/8.-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81%E5%92%8C%E5%90%8C%E6%AD%A5%E5%99%A8#81-%E5%8F%AF%E9%87%8D%E5%85%A5%E9%94%81reentrant-lock)
+
+## Redisson单机版
+
+![image-20240319213348674](pictures/image-20240319213348674.png)
+
+添加依赖
+
+```
+<dependency>
+    <groupId>org.redisson</groupId>
+    <artifactId>redisson</artifactId>
+    <version>3.19.1</version>
+</dependency>
+```
+
+配置文件
+
+```
+    //单Redis节点模式
+    @Bean
+    public Redisson redisson() {
+        Config config = new Config();
+        config.useSingleServer().setAddress("redis://192.168.119.202:6379").setDatabase(0).setPassword("159753");
+        return (Redisson) Redisson.create(config);
+    }
+```
+
+代码示例
+
+```
+    @Resource
+    Redisson redisson;
+
+    @GetMapping("v7")
+    public String v7(){
+
+        String key = "redisLock";
+
+        RLock lock = redisson.getLock(key);
+
+        lock.lock();
+
+        try {
+            //do something
+        } finally {
+            lock.unlock();
+        }
+        return "success";
+    }
+    
+ //并发情况特别多的情况下 解锁
+ if (lock.isLocked() && lock.isHeldByCurrentThread()) {
+ 	lock.unlock();
+ }
+```
+
+## Redisson多机版
+
+![image-20240319213405890](pictures/image-20240319213405890.png)
+
+在后续版本中RedLock被废除，使用MultiLock。
+
+![image-20240319223309419](pictures/image-20240319223309419.png)
+
+![image-20240319223325405](pictures/image-20240319223325405.png)
+
+配置文件
+
+```
+    @Bean
+    RedissonClient redissonClient1() {
+        Config config = new Config();
+        SingleServerConfig serverConfig = config.useSingleServer()
+                .setAddress("redis://192.168.119.201:6379")
+                .setTimeout(3000)
+                .setConnectionPoolSize(10)
+                .setConnectionMinimumIdleSize(1)
+                .setPassword("159753");
+        return Redisson.create(config);
+    }
+
+    @Bean
+    RedissonClient redissonClient2() {
+        Config config = new Config();
+        SingleServerConfig serverConfig = config.useSingleServer()
+                .setAddress("redis://192.168.119.202:6379")
+                .setTimeout(3000)
+                .setConnectionPoolSize(10)
+                .setConnectionMinimumIdleSize(1)
+                .setPassword("159753");
+        return Redisson.create(config);
+    }
+
+    @Bean
+    RedissonClient redissonClient3() {
+        Config config = new Config();
+        SingleServerConfig serverConfig = config.useSingleServer()
+                .setAddress("redis://192.168.119.203:6379")
+                .setTimeout(3000)
+                .setConnectionPoolSize(10)
+                .setConnectionMinimumIdleSize(1)
+                .setPassword("159753");
+        return Redisson.create(config);
+```
+
+示例
+
+```
+    @Resource
+    RedissonClient redissonClient1;
+
+    @Resource
+    RedissonClient redissonClient2;
+
+    @Resource
+    RedissonClient redissonClient3;
+
+    @GetMapping("v8")
+    public String v8(){
+
+        String key = "redisLock";
+
+        RLock lock1 = redissonClient1.getLock(key);
+        RLock lock2 = redissonClient2.getLock(key);
+        RLock lock3 = redissonClient3.getLock(key);
+
+        RedissonMultiLock lock = new RedissonMultiLock(lock1, lock2, lock3);
+
+        lock.lock();
+
+        try {
+            //do something
+        } finally {
+            lock.unlock();
+        }
+        return "success";
+    }
+```
+
+## Redisson源码解析
+
+RedissonLock
+
+**Lock**
+
+找到 lock 方法
+
+![image-20240319231135142](pictures/image-20240319231135142.png)
+
+尝试获取锁，如果获取不到进行自旋
+
+![image-20240319231241875](pictures/image-20240319231241875.png)
+
+![image-20240319231322515](pictures/image-20240319231322515.png)
+
+![image-20240319231445746](pictures/image-20240319231445746.png)
+
+找到进行 lock 的 lua 脚本
+
+如果不存在 key 或 当前所持有的 key 是自己的
+
+对 key 进行自增
+
+对 key 设置过期时间
+
+![image-20240319231553790](pictures/image-20240319231553790.png)
+
+**UnLock**
+
+![image-20240319231858065](pictures/image-20240319231858065.png)
+
+![image-20240319231916681](pictures/image-20240319231916681.png)
+
+找到 unlock 对应的 lua 脚本
+
+如果对应的 key 不存在，直接返回
+
+对对应的 key 进行自减
+
+如果对应的 value 大于0，对该 key 设置过期时间
+
+如果对应的 value 小于0，对该 key 进行删除，并发布解锁消息
+
+![image-20240319232004057](pictures/image-20240319232004057.png)
+
+**WathDog**
+
+在之前的 lock 代码中，如果加锁成功的话发布线程。
+
+![image-20240319232547201](pictures/image-20240319232547201.png)
+
+![image-20240319232717500](pictures/image-20240319232717500.png)
+
+这里的 internalLockLeaseTime，是配置中设置的看门狗超时时间。
+
+每 internalLockLeaseTime/3 的时间，执行一次续时。
+
+![image-20240319232816636](pictures/image-20240319232816636.png)
+
+继续跟进找到看门狗机制的 lua 脚本。
+
+判断该当前所持有的 key 是否是自己的
+
+如果是，对该 key 进行续时，时间为配置中的 internalLockLeaseTime。
+
+如果不是，返回0。
+
+![image-20240319232946602](pictures/image-20240319232946602.png)
