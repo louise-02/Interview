@@ -2883,9 +2883,15 @@ list、hash、set和zset，个数超过**5000**就是bigkey。
 
 ![image-20240307223412386](pictures/image-20240307223412386.png)
 
-## BigKey生产调优
+## BigKey生产调优 惰性删除
 
 redis.conf配置文件LAZY FREEING相关说明
+
+1. `lazyfree-lazy-eviction`：控制是否启用懒惰释放机制来延迟内存回收。
+2. `lazyfree-lazy-expire`：控制是否启用懒惰释放机制来延迟过期键的删除操作。
+3. `lazyfree-lazy-server-del`：控制是否启用懒惰释放机制来延迟删除服务器中的键。
+4. `replica-lazy-flush`：控制是否启用懒惰刷新机制，用于延迟主从节点之间的数据同步操作。
+5. `lazyfree-lazy-user-del`：控制是否启用懒惰释放机制来延迟用户请求的删除操作。
 
 ![image-20240306233424887](pictures/image-20240306233424887.png)
 
@@ -4025,3 +4031,625 @@ RedissonLock
 如果不是，返回0。
 
 ![image-20240319232946602](pictures/image-20240319232946602.png)
+
+# 缓存过期淘汰策略
+
+## 面试题
+
+- 生产上你们的Redis内存设置多少？
+- 如何配置、修改redis的内存大小
+- 如果内存满了怎么办
+- redis清理内存的方式？定期删除和惰性删除了解过吗
+- redis缓存淘汰策略有哪些？分别是什么？你用哪个？
+- redis的LRU了解过吗？请手写LRU
+- LRU和LFU算法的区别是什么
+
+## Redis内存满了怎么办？
+
+**查看Redis最大占用内存**
+
+配置文件中：`maxmemory bytes`
+
+如果不设置最大值或者为0，在64位操作系统下**不限制内存大小**，在32位操作系统下最多使用3G内存。
+
+**生产环境中如何配置？**
+
+一般推荐Redis设置内存为最大物理内存的四分之三
+
+**如何修改redis内存设置**
+
+配置文件：`maxmemory bytes`
+
+命令：`config set maxmemory bytes`，`config get maxmemory`
+
+**如何查看内存使用情况**
+
+命令：`info memory`
+
+## Redis缓存淘汰策略
+
+**如何配置**
+
+配置文件中：`maxmemory-policy 策略`
+
+**LRU与LFU的区别**
+
+LRU：最近最少使用页面置换算法，淘汰**最长时间未被使用的页面**，看页面最后一次被使用到发生调度的时间长短，首先淘汰最长时间未被使用的页面。
+
+LFU：最近最不常用页面置换算法，淘汰**一定时期内被访问次数最少的页**，看一定时间段内页面被使用的频率，淘汰一定时期内被访问次数最少的页。
+
+例如：十分钟内访问2 1 2 1 2 3 4
+
+若按LRU算法,应换页面1(1页面最久未被使用)，但按LFU算法应换页面3(十分钟内,页面3只使用了一次)
+
+**Redis7缓存淘汰策略有哪些**
+
+1. noeviction: 不会驱逐任何key，表示即使内存达到上限也不进行置换，所有能引起内存增加的命令都会返回error
+2. volatile-ttl: 删除马上要过期的key
+3. allkeys-lru: 对所有key使用LRU算法进行删除，优先删除掉最近最不经常使用的key，用以保存新数据
+4. volatile-lru: 对所有设置了过期时间的key使用LRU算法进行删除
+5. allkeys-random: 对所有key随机删除
+6. volatile-random: 对所有设置了过期时间的key随机删除
+7. allkeys-lfu: 对所有key使用LFU算法进行删除
+8. volatile-lfu: 对所有设置了过期时间的key使用LFU算法进行删除
+
+**如何选择策略**
+
+- 在所有的key都是最近最经常使用，那么就需要选择 allkeys-lru 进行置换最近最不经常使用的键，如果你不确定使用哪种策略，那么推荐使用allkeys-lru
+- 如果所有的key的访问概率都是差不多的，那就可以选择 allkeys-random 策略
+- 如果对数据有足够的了解，能够为 key 指定 hint(通过expire/ttl指定)，那么可以选择 volatile-ttl
+
+# Redis经典五大类型源码及底层实现
+
+## 面试题
+
+- Redis的跳跃列表了解吗？这个数据结构有什么缺点
+- Redis的zset底层实现，说了压缩列表和跳表，这样设计的优缺点
+- Redis的跳表说一下，解决了哪些问题，时间复杂度和空间复杂度如何
+
+## Redis源码架构
+
+https://github.com/redis/redis
+
+\redis-7.0.5\src
+
+![image-20240325222432160](pictures/image-20240325222432160.png)
+
+**Redis基础的数据结构**
+
+Redis对象：`object.c`
+
+字符串：`t_string.c`
+
+列表：`t_list.c`
+
+哈希：`t_hash.c`
+
+集合及有序集合：`t_set.c`、`t_zset.c`
+
+数据流：`t_stream.c`，Streams的底层实现结构：`listpack.c`、`rax.c`
+
+简单动态字符串：`sds.c`
+
+整数集合：`intset.c`
+
+压缩列表：`ziplist.c`
+
+快速链表：`quicklist.c`
+
+紧凑列表：`listpack.c`
+
+字典：`dict.c`
+
+**Redis数据库的实现**
+
+数据库底层实现：`db.c`
+
+持久化实现：`rbd.c`、`aof.c`
+
+**Redis服务端和客户端的实现**
+
+事件驱动：`ae.c`、`ae_epoll.c`
+
+网络连接：`anet.c`、`networking.c`
+
+服务端程序：`server.c`
+
+客户端程序：`redis-cli.c`
+
+**其他**
+
+主从复制：`replication.c`
+
+哨兵：`sentinel.c`
+
+集群：`cluster.c`
+
+其他数据结构：`hyperloglog.c`、`geo.c`等
+
+其他功能：如pub/sub、Lua脚本
+
+## 数据类型和数据结构之间的关系
+
+**Redis6.0.5 数据类型与数据结构关系**
+
+![image-20240327214156310](pictures/image-20240327214156310.png)
+
+**Redis7 数据类型与数据结构关系**
+
+![image-20240327214214008](pictures/image-20240327214214008.png)
+
+## 简述Redisz整体架构
+
+redis 是 key-value 存储系统，key 一般都是 String 类型的字符串，value 类型则是 redis对象（**redisObject**），value 可以是字符串对象，也可以是集合类型对象，如：List 对象、Hash 对象、Set 对象、Zset对象。
+
+redisServer 通过服务器加载 redisDb，形成 dict 字典，包含有 dictht 哈希表，每个 key 形成对应的 dictEntry 实体，其中 value 指向 redisObject（String，List等封装的对象）。
+
+![image-20240327213211760](pictures/image-20240327213211760.png)
+
+---
+
+**传统五大数据类型**
+
+String
+
+List
+
+Hash
+
+Set
+
+Zset
+
+**其他几种**
+
+Bitmap：实质是 String
+
+HyperLogLog：实质是 String
+
+Geo：实质是 Zset
+
+Stream：实质是 Stream
+
+Bitfield：看具体的 key
+
+---
+
+Redis 定义了 redisObject 结构体来表示 string，hash，list，set，zset 等数据结构。
+
+**C语言 struct 结构语法简介**
+
+![image-20240326222439309](pictures/image-20240326222439309.png)
+
+Redis 中每个对象都是一个 redisObject 结构。
+
+---
+
+**字典、KV是什么（重点）**
+
+每个键值对都会有一个 dictEntry。
+
+**dictEntry** 源码位置 dict.h，https://github.com/redis/redis/blob/7.0.5/src/dict.h
+
+dictEntry 表示哈希表节点的结构，存放了`void *key`和`void *value`指针。
+
+`void *key`指向 String 对象
+
+`void *value`既能指向 String 对象，也能指向集合类型的对象
+
+它们指向的都是内部抽象的 redis对象（redisObject）
+
+![image-20240326232139980](pictures/image-20240326232139980.png)
+
+
+
+**redisObject** 源码位置 server.h，https://github.com/redis/redis/blob/7.0.5/src/server.h
+
+`void *ptr`指向底层数据结构：SDS，双向链表，压缩链表，哈希表，跳表，整数集合等
+
+![image-20240327212818101](pictures/image-20240327212818101.png) 
+
+---
+
+**底层结构**
+
+1. SDS 动态字符串
+2. 双向链表
+3. 压缩列表 ziplist
+4. 哈希表 hashtable
+5. 跳表 skiplist
+6. 整数集合 intset
+7. 快速列表 quicklist
+8. 紧凑列表 listpack
+
+在 server.h 中定义了这些底层结构的常量 https://github.com/redis/redis/blob/7.0.5/src/server.h
+
+![image-20240327214647803](pictures/image-20240327214647803.png)
+
+---
+
+**从 set hello world 说起**
+
+每个键值对都会有一个 dictEntry。
+
+以 set hello world 为例，里面指向了 key 和 value 指针，next 指向下一个 dictEntry。
+
+key 是字符串，但是 Redis 没有直接使用 C语言的字符数组，而是存储在 Redis 自定义的 SDS 中。
+
+value 既不是直接作为字符串存储，也不是直接存储在 SDS 中，而是存储在 redisObject 中。
+
+实际上五种常用的数据类型的任意一种，都是通过 redisObject 来存储的。
+
+![image-20240328232904577](pictures/image-20240328232904577.png)
+
+![image-20240328232918693](pictures/image-20240328232918693.png)
+
+查看类型：type hello
+
+查看编码：object encoding hello
+
+---
+
+**redisObject 结构的作用**
+
+为了便于操作，Redis 采用 redisObject 结构来统一五种不同的数据类型，这样所有的数据类型就都可以以相同的形式在函数间传递而不用使用特定的类型结构。同时，为了识别不同的数据类型，redisObjec 中定义了 type 和 encoding 字段对不同的数据类型加以区别。简单地说，**redisObjec 就是 string、hash、list、set、zset 的父类**，可以在函数间传递时隐藏具体的类型信息，所以作者抽象了 redisObject 结构来到达同样的目的。
+
+![image-20240328233228650](pictures/image-20240328233228650.png)
+
+![image-20240328233424011](pictures/image-20240328233424011.png)
+
+1. 4位的type表示具体的数据类型
+2. 4位的encoding表示该类型的物理编码方式见下表，同一种数据类型可能有不同的编码方式。(比如String就提供了3种:int embstr raw)
+3. lru字段表示当内存超限时采用LRU算法清除内存中的对象。
+4. refcount表示对象的引用计数。
+5. **ptr指针指向真正的底层数据结构的指针**。
+
+![image-20240328233551274](pictures/image-20240328233551274.png)
+
+例如：set age 17
+
+![image-20240328233634352](pictures/image-20240328233634352.png)
+
+type： 类型
+
+encoding：编码，此处是数字类型
+
+lru：最近被访问的时间
+
+refcount：等于1，表示当前对象被引用的次数
+
+ptr： value值是多少，当前就是17
+
+---
+
+**各个类型数据结构的编码映射和定义**
+
+![image-20240328233822402](pictures/image-20240328233822402.png)
+
+---
+
+**Debug Object key**
+
+需要在配置文件中配置：`enable-debug-command local`
+
+Value at：内存地址
+
+refcount：引用次数
+
+encoding：物理编码类型
+
+serializedlength：序列化后的长度（注意这里的长度是序列化后的长度，保存为rdb文件时使用了该算法，不是真正存贮在内存的大小),会对字串做一些可能的压缩以便底层优化
+
+lru：记录最近使用时间戳
+
+lru_seconds_idle：空闲时间
+
+## String数据结构
+
+**Set 操作源码**
+
+t_string.c，https://github.com/redis/redis/blob/7.0.5/src/t_string.c
+
+![image-20240406113655024](pictures/image-20240406113655024.png)
+
+**三大物理编码方式**
+
+int
+
+embstr
+
+raw
+
+---
+
+**int**
+
+保存long 型(长整型)的64位(8个字节)有符号整数，此时即对应 OBJ_ENCODING_INT 编码类型。
+
+只有整数才会使用 int，如果是浮点数， Redis内部其实先将浮点数转化为字符串值，然后再保存。
+
+![image-20240328234604819](pictures/image-20240328234604819.png)
+
+Redis 启动时会预先建立 10000 个分别存储 0~9999 的 redisObject 变量作为共享对象，这就意味着如果 set字符串的键值在 0~10000 之间的话，则可以 **直接指向共享对象 而不需要再建立新对象，此时键值不占空间！**
+
+server.h，https://github.com/redis/redis/blob/7.0.5/src/server.h
+
+`111 #define OBJ_SHARED_INTEGERS 10000`
+
+object.c，https://github.com/redis/redis/blob/7.0.5/src/object.c
+
+![image-20240406114750125](pictures/image-20240406114750125.png)
+
+**embstr**
+
+代表 embstr 格式的 SDS(Simple Dynamic String简单动态字符串，保存长度小于44字节的字符串。
+
+EMBSTR 顾名思义即：embedded string，表示嵌入式的String。
+
+从内存结构上来讲，即字符串 sds结构体与其对应的 redisObject 对象分配在同一块**连续的内存空间**，字符串 sds 嵌入在redisObject对象之中一样。
+
+object.c，https://github.com/redis/redis/blob/7.0.5/src/object.c
+
+![image-20240406120726996](pictures/image-20240406120726996.png)
+
+![image-20240406120755394](pictures/image-20240406120755394.png)
+
+
+
+**raw**
+
+保存长度大于44字节的字符串
+
+![image-20240406120914283](pictures/image-20240406120914283.png)
+
+当字符串的键值为长度大于44的超长字符串时，Redis 则会将键值的内部编码方式改为 OBJ_ENCODING_RAW 格式，这与 OBJ_ENCODING_EMBSTR 编码方式的不同之处在于，此时动态字符串sds的内存与其依赖的 redisObject 的**内存不再连续**。
+
+```
+> set k1 123
+> object encoding k1
+int
+
+> set k1 123456
+> object encoding k1
+int
+
+> set k1 1234561111111111111111
+> object encoding k1
+embstr
+
+> set k1 abc
+> object encoding k1
+embstr
+
+> set k1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+> object encoding k1
+raw
+```
+
+---
+
+**SDS简单动态字符串**
+
+sds.h，https://github.com/antirez/sds
+
+![image-20240328235213930](pictures/image-20240328235213930.png)
+
+len：**当前字符串数组的长度**，可以通过O(1)获取到，而不是像 C 那样需要遍历一遍字符串
+
+alloc：**当前字符数组总共分配的内存大小**，可以用来计算 free（字符串已经分配的未使用的空间），有了这个值就可以引入预分配空间的算法了，而不用去考虑内存分配的问题。
+
+flags：**当前字符数组的属性**，用来标识到底是 sdshdr8、sdshdr16等
+
+buf：**字符串真正的值**
+
+---
+
+**Redis为什么重新设计一个SDS数据结构**
+
+字符串在 C 语言中的存储方式，想要获取 「Redis」的长度，需要从头开始遍历，直到遇到 '\0' 为止。所以，Redis 没有直接使用 C 语言传统的字符串标识，而是自己构建了一种名为简单动态字符串 SDS（simple dynamic string）的抽象类型，并将 SDS 作为 Redis 的默认字符串。
+
+|                    | C语言                                                        | SDS                                                          |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **字符串长度处理** | 需要从头开始遍历，直到遇到 '\0' 为止，时间复杂度O(N)         | 记录当前字符串的长度，直接读取即可，时间复杂度 O(1)          |
+| **内存重新分配**   | 分配内存空间超过后，会导致数组下标越级或者内存分配溢出       | 空间预分配SDS 修改后，len 长度小于 1M，那么将会额外分配与 len 相同长度的未使用空间。如果修改后长度大于 1M，那么将分配1M的使用空间。惰性空间释放有空间分配对应的就有空间释放。SDS 缩短时并不会回收多余的内存空间，而是使用 free 字段将多出来的空间记录下来。如果后续有变更操作，直接使用 free 中记录的空间，减少了内存的分配。 |
+| **二进制安全**     | 二进制数据并不是规则的字符串格式，可能会包含一些特殊的字符，比如 '\0' 等。前面提到过，C中字符串遇到 '\0' 会结束，那 '\0' 之后的数据就读取不上了 | 根据 len 长度来判断字符串结束的，二进制安全的问题就解决了    |
+
+---
+
+**小结**
+
+只有整数才会使用 int，如果是浮点数， Redis 内部其实先将浮点数转化为字符串值，然后再保存。
+
+embstr 与 raw 类型底层的数据结构其实都是 SDS (简单动态字符串，Redis 内部定义 sdshdr 一种结构)。
+
+int：Long类型整数时，RedisObject中的ptr指针直接赋值为整数数据，不再额外的指针再指向整数了，节省了指针的空间开销。
+
+embstr：当保存的是字符串数据且字符串**小于等于44字节**时，embstr类型将会调用内存分配函数，**只分配一块连续的内存空间**，空间中依次包含 redisObject 与 **sdshdr** 两个数据结构，让元数据、指针和SDS是一块连续的内存区域，这样就可以避免内存碎片。
+
+raw：当字符串大于44字节时，SDS的数据量变多变大了，SDS 和 RedisObject 布局分家各自过，会给SDS分配多的空间并用指针指向SDS结构，raw 类型将会调用**两次内存分配函数**，分配两块内存空间，一块用于包含 redisObject结构，而另一块用于包含 sdshdr 结构。
+
+![image-20240406112414114](pictures/image-20240406112414114.png)
+
+## Hash数据结构
+
+**Redis6**
+
+Redis6 中采用 ziplist + hashtable，其中有两个配置。
+
+`hash-max-ziplist-entries`：使用压缩列表保存时哈希集合中的最大元素个数，默认512个
+
+`hash-max-ziplist-value`：使用压缩列表保存时哈希集合中单个元素的最大长度，默认64byte
+
+当字段个数小于 `hash-max-ziplist-entries` 且每个KV的长度小于 `hash-max-ziplist-value` 时，Hash 会使用 OBJ_ENCODING_ZIPLIST 来存储，如果有任意一个不符合就会转换为 OBJ_ENCODING_HT 编码方式。
+
+其中 ziplist 升级到 hashtable 可以，但是降级不可以。
+
+---
+
+**OBJ_ENCODING_HT，t_hash.c**
+
+在 Redis 中，hashtable 被称为字典（dictionary），它是一个**数组+链表**的结构。
+
+OBJ_ENCODING_HT 这种编码方式内部才是真正的哈希表结构，或称为字典结构，其可以实现O(1)复杂度的读写操作，因此效率很高。
+
+在 Redis内部，从 OBJ_ENCODING_HT类型到底层真正的散列表数据结构是一层层嵌套下去的
+
+![image-20240408223137283](pictures/image-20240408223137283.png)
+
+这个结构的源码在 dict.h 中
+
+![image-20240408223314017](pictures/image-20240408223314017.png)
+
+在 hset 命令时会进行判断由 ziplist 转换为 hashtable
+
+![image-20240408223430082](pictures/image-20240408223430082.png)
+
+![image-20240408223445096](pictures/image-20240408223445096.png)
+
+
+
+---
+
+**OBJ_ENCODING_ZIPLIST，ziplist.c**
+
+为了节约内存而开发的，它是由连续内存块组成的顺序型数据结构，有点类似于**数组**
+
+ziplist t是一个经过特殊编码的**双向链表**，**不存储指向前一个链表节点prev和指向下一个链表节点的指针next**而是**存储上一个节点长度和当前节点长度**，过牺牲部分读写性能，来换取高效的内存空间利用率，节约内存，是一种时间换空间的思想。只用在**字段个数少，字段值小的场景里面**。
+
+![image-20240408223834423](pictures/image-20240408223834423.png)
+
+![image-20240408223901556](pictures/image-20240408223901556.png)
+
+**zlentry 压缩列表节点结构**
+
+![image-20240408223949236](pictures/image-20240408223949236.png)
+
+prevrawlensize：上一个链表节点长度所占的字节数
+
+prevrawlen：上一个链表节点的长度
+
+lensize：当前链表节点长度所占的字节数
+
+len：当前链表节点的长度
+
+headersize：当前链表节点的头部大小（prevrawlensize+lensize），即非数据域的大小
+
+encoding：编码方式
+
+p：压缩链表以字符串的形式保存，该指针指向当前节点起始位置
+
+**ziplist 存取情况**
+
+前节点：(前节点占用的内存字节数)表示前1个 zlentry 的长度，privious_entry_length 有两种取值情况：**1字节或5字节**。取值1字节时，表示上一个 entry 的长度小于254字节。虽然1字节的值能表示的数值范围是0到255，但是压缩列表中 zlend 的取值默认是255，因此，就默认用255表示整个压缩列表的结束，其他表示长度的地方就不能再用255这个值了。所以，当上一个 entry 长度小于254字节时，prev_len 取值为1字节，否则，就取值为5字节。记录长度的好处：占用内存小，1或者5个字节
+
+enncoding：记录节点的content保存数据的类型和长度。
+
+content：保存实际数据内容
+
+![image-20240408230731944](pictures/image-20240408230731944.png)
+
+**为什么 zlentry 这么设计？数组和链表数据结构对比**
+
+privious_entry_length，encoding 长度都可以根据编码方式推算，真正变化的是 content，而 content 长度记录在 encoding 里 ，因此 entry 的长度就知道了。
+
+entry 总长度 = privious_entry_length 字节数 + encoding 字节数 + content 字节数
+
+![image-20240408231106281](pictures/image-20240408231106281.png)
+
+**为什么要记录前一个节点的长度？**
+
+链表在内存中，一般是不连续的，遍历相对比较慢。而 ziplist 可以很好的解决这个问题。如果知道了当前的起始地址，因为 entry 是连续的，entry 后一定是另一个 entry，想知道下一个 entry 的地址，只要将当前的起始地址加上当前 entry 总长度。如果还想遍历下一个 entry，只要继续同样的操作。
+
+**明明有链表了，为什么出来一个压缩链表？**
+
+普通的双向链表会有两个指针，在存储数据很小的情况下，**我们存储的实际数据的大小可能还没有指针占用的内存大，得不偿失**。ziplist 是一个特殊的双向链表**没有维护双向指针 previous 和 next**；而是存储上一个 entry 的长度和当前 entry 的长度，通过长度推算下一个元素在什么地方。牺牲读取的性能，获得高效的存储空间，因为(简短字符串的情况)存储指针比存储entry长度更费内存。这是典型的时间换空间。
+
+链表在内存中一般是不连续的，遍历相对比较慢而 ziplist 可以很好的解决这个问题，普通数组的遍历是根据数组里存储的数据类型找到下一个元素的(例如 int 类型的数组访问下一个元素时每次只需要移动一个 sizeof(int) 就行)，但是 ziplist 的每个节点的长度是可以不一样的，而我们面对不同长度的节点又不可能直接 sizeof(entry)，所以 ziplist 只好将一些必要的偏移量信息记录在了每一个节点里，使之能跳到上一个节点或下一个节点。
+
+头节点里有头节点里同时还有一个参数 len，和 string 类型提到的 SDS 类似，这里是用来记录链表长度的。因此获取链表长度时不用再遍历整个链表，直接拿到    len 值就可以了，这个时间复杂度是 O(1)。
+
+**ziplist 小结**
+
+ziplist 为了节省内存，采用了紧凑的连续存储。
+
+ziplist 是一个双向链表，可以在时间复杂度为 O(1) 下从头部、尾部进行 pop 或 push。
+
+新增或更新元素可能会出现连锁更新现象(致命缺点导致被 listpack 替换)。
+
+不能保存过多的元素，否则查询效率就会降低，数量小和内容小的情况下可以使用。
+
+---
+
+**Redis7**
+
+Redis7 中采用 listpack + hashtable，其中有两个配置。
+
+`hash-max-listpack-entries`：使用压缩列表保存时哈希集合中的最大元素个数，默认512个
+
+`hash-max-listpack-value`：使用压缩列表保存时哈希集合中单个元素的最大长度，默认64byte
+
+当字段个数小于 `hash-max-listpack-entries` 且每个KV的长度小于 `hash-max-listpack-value` 时，Hash 会使用 OBJ_ENCODING_LISTPACK 来存储，如果有任意一个不符合就会转换为 OBJ_ENCODING_HT 编码方式。
+
+其中 listpack 升级到 hashtable 可以，但是降级不可以。
+
+---
+
+**OBJ_ENCODING_LISTPACK，listpack.c**
+
+LP_HDR_SIZE 6
+
+![image-20240408232235340](pictures/image-20240408232235340.png)
+
+lpNew 函数创建了一个空的 listpack，一开始分配的大小是 LP_HDR_SIZE 再加 1 个字节。LP_HDR_SIZE 宏定义是在 listpack.c 中，它默认是 6 个字节，其中 4 个字节是记录 listpack 的总字节数，2 个字节是记录 listpack 的元素数量。
+
+此外，listpack 的最后一个字节是用来标识 listpack 的结束，其默认值是宏定义 LP_EOF。
+
+和 ziplist 列表项的结束标记一样，LP_EOF 的值也是 255
+
+**明明有了 ziplist，为什么出来一个 listpack 紧凑列表？**
+
+ziplist 的连锁更新问题
+
+压缩列表新增某个元素或修改某个元素时，如果空间不不够，压缩列表占用的内存空间就需要重新分配。而当新插入的元素较大时，可能会导致后续元素的 prevlen 占用空间都发生变化，从而引起「连锁更新」问题，导致每个元素的空间都要重新分配，造成访问压缩列表性能的下降。
+
+**第一步**：现在假设一个压缩列表中有多个连续的、长度在 250～253 之间的节点，如下图：
+
+![image-20240408233345706](pictures/image-20240408233345706.png)
+
+因为这些节点长度值小于 254 字节，所以 prevlen 属性需要用 1 字节的空间来保存这个长度值，一切OK
+
+**第二步**：这时，如果将一个长度大于等于 254 字节的新节点加入到压缩列表的表头节点，即新节点将成为entry1的前置节点，如下图：
+
+![image-20240408233419273](pictures/image-20240408233419273.png)
+
+因为 entry1 节点的 prevlen 属性只有1个字节大小，无法保存新节点的长度，此时就需要对压缩列表的空间重分配操作并将 entry1 节点的 prevlen 属性从原来的 1 字节大小扩展为 5 字节大小。
+
+**第三步**：连续更新问题出现
+
+![image-20240408233509489](pictures/image-20240408233509489.png)
+
+entry1 节点原本的长度在250～253之间，因为刚才的扩展空间，此时 entry1 节点的长度就大于等于254，因此原本 entry2 节点保存 entry1 节点的 prevlen属性也必须从1字节扩展至5字节大小。entry1 节点影响 entry2 节点，entry2 节点影响 entry3 节点......一直持续到结尾。这种在特殊情况下产生的连续多次空间扩展操作就叫做「连锁更新」。
+
+**listpack 结构**
+
+https://github.com/antirez/listpack/blob/master/listpack.md
+
+listpack 由4部分组成
+
+Total Bytes：为整个 listpack 的空间大小，占用4个字节，每个 listpack 最多占用4294967295Bytes。
+
+num-elements：为 listpack 中的元素个数，即 Entry 的个数占用2个字节
+
+element-1~element-N：为每个具体的元素
+
+listpack-end-byte：为 listpack 结束标志，占用1个字节，内容为0xFF。
+
+![image-20240408233846561](pictures/image-20240408233846561.png)
+
+entry 由3部分组成
+
+entry-encoding：当前元素的编码类型
+
+entry-data：元素数据
+
+entry-len：以及编码类型和元素数据这两部分的长度
