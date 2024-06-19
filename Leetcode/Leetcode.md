@@ -1,53 +1,12 @@
-# 1. 两数之和 数组 哈希表
+# 1. [两数之和](https://leetcode.cn/problems/two-sum/description/)『数组 哈希表』
 
-给定一个整数数组 `nums` 和一个整数目标值 `target`，请你在该数组中找出 **和为目标值** `target` 的那 **两个** 整数，并返回它们的数组下标。
-
-你可以假设每种输入只会对应一个答案。但是，数组中同一个元素在答案里不能重复出现。
-
-你可以按任意顺序返回答案。
-
----
-
-**示例 1：**
-
-```
-输入：nums = [2,7,11,15], target = 9
-输出：[0,1]
-解释：因为 nums[0] + nums[1] == 9 ，返回 [0, 1] 。
-```
-
-**示例 2：**
-
-```
-输入：nums = [3,2,4], target = 6
-输出：[1,2]
-```
-
-**示例 3：**
-
-```
-输入：nums = [3,3], target = 6
-输出：[0,1]
-```
-
----
-
-**提示：**
-
-- `2 <= nums.length <= 104`
-- `-109 <= nums[i] <= 109`
-- `-109 <= target <= 109`
-- **只会存在一个有效答案**
-
----
-
-**暴力解**
+**1、暴力解**
 
 时间复杂度：O(N^2)
 
 空间复杂度：O(1)
 
-```
+```java
 public int[] twoSum(int[] nums, int target) {
     for (int i = 0; i < nums.length; i++) {
         for (int j = i + 1; j < nums.length; j++) {
@@ -60,13 +19,13 @@ public int[] twoSum(int[] nums, int target) {
 }
 ```
 
-**哈希表**
+**2、哈希表**
 
 时间复杂度：O(N)
 
 空间复杂度：O(N)
 
-```
+```java
 public int[] twoSum1(int[] nums, int target) {
     HashMap<Integer, Integer> diffIndexMap = new HashMap<>();
     for (int i = 0; i < nums.length; i++) {
@@ -80,49 +39,9 @@ public int[] twoSum1(int[] nums, int target) {
 }
 ```
 
-# 2.两数相加 链表 递归
+# 2. [两数相加](https://leetcode.cn/problems/add-two-numbers/description/)『链表 迭代 递归』
 
-给你两个 **非空** 的链表，表示两个非负的整数。它们每位数字都是按照 **逆序** 的方式存储的，并且每个节点只能存储 **一位** 数字。
-
-请你将两个数相加，并以相同形式返回一个表示和的链表。
-
-你可以假设除了数字 0 之外，这两个数都不会以 0 开头。
-
----
-
-**示例 1：**
-
-```
-输入：l1 = [2,4,3], l2 = [5,6,4]
-输出：[7,0,8]
-解释：342 + 465 = 807.
-```
-
-**示例 2：**
-
-```
-输入：l1 = [0], l2 = [0]
-输出：[0]
-```
-
-**示例 3：**
-
-```
-输入：l1 = [9,9,9,9,9,9,9], l2 = [9,9,9,9]
-输出：[8,9,9,9,0,0,0,1]
-```
-
----
-
-**提示：**
-
-- 每个链表中的节点数在范围 `[1, 100]` 内
-- `0 <= Node.val <= 9`
-- 题目数据保证列表表示的数字不含前导零
-
----
-
-```
+```java
 /**
  * Definition for singly-linked list.
  * public class ListNode {
@@ -135,3 +54,85 @@ public int[] twoSum1(int[] nums, int target) {
  */
 ```
 
+**迭代**
+
+```java
+public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
+    ListNode first = new ListNode();
+    ListNode temp = first;
+    int up = 0;
+    while (l1 != null || l2 != null) {
+        int n1 = 0, n2 = 0;
+        if (l1 != null) {
+            n1 = l1.val;
+            l1 = l1.next;
+        }
+        if (l2 != null) {
+            n2 = l2.val;
+            l2 = l2.next;
+        }
+        temp.val = (n1 + n2 + up) % 10;
+        up = (n1 + n2 + up) / 10;
+        if (l1 != null || l2 != null) {
+            temp.next = new ListNode();
+            temp = temp.next;
+        }
+    }
+    if (up == 1) {
+        temp.next = new ListNode(1);
+    }
+    return first;
+}
+```
+
+**递归**
+
+```java
+public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
+	return addTwoNumbers1(l1, l2, 0);
+}
+
+
+public ListNode addTwoNumbers1(ListNode l1, ListNode l2, int up) {
+    if (l1 == null && l2 == null) {
+        return up == 0 ? null : new ListNode(up);
+    }
+    int sum = (l1 == null ? 0 : l1.val) + (l2 == null ? 0 : l2.val) + up;
+    int val = sum % 10;
+    up = sum / 10;
+    ListNode listNode = new ListNode(val);
+    listNode.next = addTwoNumbers1(l1 == null ? null : l1.next, l2 == null ? null : l2.next, up);
+    return listNode;
+}
+```
+
+# 3.[无重复字符的最长子串](https://leetcode.cn/problems/longest-substring-without-repeating-characters/description/)『字符串 滑动窗口』
+
+1、**滑动窗口**
+
+定义左右指针，右指针在添加的时候如何发现有重复内容就去掉左指针所在位置的字符。
+
+```java
+public int lengthOfLongestSubstring(String s) {
+    if (s == null) {
+        return 0;
+    }
+
+    HashSet<Character> set = new HashSet<>();
+
+    char[] chars = s.toCharArray();
+
+    int left = 0, maxLength = 0;
+
+    for (int i = 0; i < chars.length; i++) {
+        while (!set.add(chars[i])) {
+            set.remove(chars[left++]);
+        }
+        maxLength = Math.max(maxLength,i - left + 1);
+    }
+
+    return maxLength;
+}
+```
+
+# 4.[寻找两个正序数组的中位数](https://leetcode.cn/problems/median-of-two-sorted-arrays/)『数组 二分』
