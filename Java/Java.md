@@ -1982,7 +1982,7 @@ public static void main(String[] args) {
 
 ![image-20240419144637045](pictures/image-20240419144637045.png)
 
-## 4. 成员变量（Field）
+## 4. 类的成员一：成员变量（Field）
 
 ### 4.1 声明成员变量
 
@@ -2085,7 +2085,7 @@ public class Student {
 
 6、默认值：实例变量有默认值。局部变量没有默认值，必须手动初始化。其中的形参比较特殊，靠实参给它初始化。
 
-## 5. 方法（Method）
+## 5. 类的成员二：方法（Method）
 
 `方法`是类或对象行为特征的抽象，用来完成某个功能操作。在某些语言中也称为`函数`或`过程`。
 
@@ -2405,7 +2405,7 @@ public class RecursionDemo {
 
 ![image-20240426114150337](pictures/image-20240426114150337.png)
 
-## 6. 构造器（Constructor）
+## 6. 类的成员三：构造器（Constructor）
 
 构造器用来 new 对象，并在 new 对象的时候为实例变量赋值。
 
@@ -2465,7 +2465,7 @@ public class TestStudent {
 
 7、构造器是可以重载的。
 
-## 7. 关键字 package
+## 7. 关键字：package
 
 ### 7.1 package 简介
 
@@ -2537,7 +2537,7 @@ public class PackageTest{
 
 包含了构成抽象窗口工具集（abstract window toolkits）的多个类，这些类被用来构建和管理应用程序的图形用户界面(GUI)。 
 
-## 8. 关键字 import
+## 8. 关键字：import
 
 为了使用定义在其它包中的 Java 类，需用 import 语句来显式引入指定包下所需要的类。相当于 import 语句告诉编译器到哪里去寻找这个类 。
 
@@ -2656,7 +2656,7 @@ private void swap(int[] arr,int i,int j){
 
 3、对于 static final 的成员变量，习惯上使用 public 修饰。
 
-## 10. 关键字 this
+## 10. 关键字：this
 
 ### 10.1 this 是什么
 
@@ -3716,7 +3716,7 @@ Java 使用起来非常方便，然而有些层次的任务用 java 实现起来
 
 native method 的存在并不会对其他类调用这些本地方法产生任何影响，实际上调用这些方法的其他类甚至不知道它所调用的是一个本地方法。JVM 将控制调用本地方法的所有细节。
 
-## 16. 关键字 static
+## 16. 关键字：static
 
 回顾类中的实例变量（非 static 的成员变量）。
 
@@ -3852,7 +3852,7 @@ public class TestStaticVariable {
 
 用 static 修饰的成员方法就是静态方法（类方法）。
 
-```
+```java
 [修饰符] class 类{
 	[其他修饰符] static 返回值类型 方法名(形参列表){
         方法体
@@ -3909,4 +3909,839 @@ public class TestStaticMethod {
 }
 ```
 
-## 17. 理解main方法的语法
+## 17. 理解 main 方法的语法
+
+由于 JVM 需要调用类的 main() 方法，所以该方法的访问权限必须是 public，又因为 JVM 在执行 main() 方法时不必创建对象，所以该方法必须是 static 的，该方法接收一个 String 类型的数组参数，该数组中保存执行 Java 命令时传递给所运行的类的参数。 
+
+**命令行参数用法举例**
+
+```java
+public class CommandPara {
+    public static void main(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            System.out.println("args[" + i + "] = " + args[i]);
+        }
+    }
+}
+```
+
+```java
+//运行程序CommandPara.java
+java CommandPara "Tom" "Jerry" "Shkstart"
+```
+
+```java
+//输出结果
+args[0] = Tom
+args[1] = Jerry
+args[2] = Shkstart
+```
+
+## 18. 类的成员四：代码块
+
+### 18.1 静态代码块
+
+如果想要为静态变量初始化，可以直接在静态变量的声明后面直接赋值，也可以使用静态代码块。
+
+**语法格式**
+
+```java
+[修饰符] class 类{
+	static{
+        静态代码块
+    }
+}
+```
+
+**静态代码块的特点**
+
+1、可以有输出语句。
+
+2、可以对类的属性、类的声明进行初始化操作。
+
+3、不可以对非静态的属性初始化。即：不可以调用非静态的属性和方法。
+
+4、若有多个静态的代码块，那么按照从上到下的顺序依次执行。
+
+5、静态代码块的执行要先于非静态代码块。
+
+6、静态代码块随着类的加载而加载，且只执行一次。
+
+**示例**
+
+```java
+public class Chinese {
+
+    private static String COUNTRY;
+
+    static {
+        COUNTRY = "中国";
+        System.out.println(COUNTRY);
+    }
+
+}
+```
+
+```java
+public class TestStaticBlock {
+    public static void main(String[] args) {
+        Chinese chinese = new Chinese();//中国
+    }
+}
+```
+
+### 18.2 非静态代码块
+
+**语法格式**
+
+```java
+[修饰符] class 类{
+    {
+        非静态代码块
+    }
+}
+```
+
+**作用**
+
+和构造器一样，也是用于实例变量的初始化等操作。
+
+如果多个重载的构造器有公共代码，并且这些代码都是先于构造器其他代码执行的，那么可以将这部分代码抽取到非静态代码块中，减少冗余代码。
+
+**非静态代码块的执行特点**
+
+1、可以有输出语句。
+
+2、可以对类的属性、类的声明进行初始化操作。
+
+3、除了调用非静态的结构外，还可以调用静态的变量或方法。
+
+4、若有多个非静态的代码块，那么按照从上到下的顺序依次执行。
+
+5、每次创建对象的时候，都会执行一次。且先于构造器执行。
+
+**示例**
+
+```java
+public class Chinese {
+
+    private String country;
+
+    {
+        country = "中国";
+    }
+
+    public Chinese() {
+        System.out.println(country);
+    }
+}
+```
+
+```java
+public class TestBlock {
+    public static void main(String[] args) {
+        Chinese chinese = new Chinese();
+    }
+}
+```
+
+### 18.3 实例变量赋值顺序
+
+1、声明成员变量的默认初始化。
+
+2、显式初始化，多个代码块依次被执行（同级别下按照代码顺序执行）。
+
+3、构造器再对成员进行初始化。
+
+4、通过 `对象.属性` 或 `对象.方法` 的方式，可多次给属性赋值。
+
+## 19. 关键字：final
+
+### 19.1 修饰类
+
+表示这个类不能被继承，没有子类。提高安全性，提高程序的可读性。
+
+例如：String、System、StringBuffer
+
+```java
+public final class Eunuch{
+	
+}
+class Son extends Eunuch{//错误
+	
+}
+```
+
+### 19.2 修饰方法
+
+表示这个方法不能被子类重写。
+
+例如：Object 类中的 getClass()
+
+```java
+class Father{
+	public final void method(){
+		System.out.println("father");
+	}
+}
+class Son extends Father{
+	public void method(){//错误
+		System.out.println("son");
+	}
+}
+```
+
+### 19.3 修饰变量
+
+final 修饰某个变量（成员变量或局部变量），一旦赋值，它的值就不能被修改，即常量，常量名建议使用大写字母。
+
+例如：final double MY_PI = 3.14;
+
+如果某个成员变量用 final 修饰后，没有 set 方法，并且必须初始化（可以显式赋值、或在初始化块赋值、实例变量还可以在构造器中赋值）
+
+### 19.4 笔试题
+
+题目一
+
+```java
+public class Something {
+    public int addOne(final int x) {
+        return ++x; //非法
+        // return x + 1; //合理
+    }
+}
+```
+
+题目二
+
+```java
+public class Something {
+    public static void main(String[] args) {
+        Other o = new Other();
+        new Something().addOne(o);
+    }
+    public void addOne(final Other o) {
+        // o = new Other(); //非法
+        o.i++; //合理
+    }
+}
+class Other {
+    public int i;
+}
+```
+
+## 20. 关键字：abstract，抽象类与抽象方法
+
+### 20.1 由来
+
+例如我们声明一些几何图形类：圆、矩形、三角形类等，发现这些类都有共同特征：求面积、求周长。那么这些共同特征应该抽取到一个共同父类：几何图形类中。但是这些方法在父类中又 `无法给出具体的实现`，而是应该交给子类各自具体实现。那么父类在声明这些方法时，`就只有方法签名，没有方法体`，我们把没有方法体的方法称为**抽象方法**。Java语法规定，包含抽象方法的类必须是**抽象类**。
+
+### 20.2 语法格式
+
+**抽象类**
+
+被 abstract 修饰的类。
+
+```java
+[权限修饰符] abstract class 类名{
+    
+}
+```
+
+**抽象方法**
+
+被 abstract 修饰没有方法体的方法。
+
+```java
+[其他修饰符] abstract 返回值类型 方法名([形参列表]);
+```
+
+**示例**
+
+```java
+public abstract class Animal {
+    public abstract void eat();
+}
+class Cat extends Animal {
+    public void eat (){
+      	System.out.println("小猫吃鱼和猫粮"); 
+    }
+}
+```
+
+### 20.3 使用说明
+
+1、抽象类**不能创建对象**，如果创建，编译无法通过而报错。只能创建其非抽象子类的对象。
+
+> 抽象类是用来被继承的，抽象类的子类必须重写父类的抽象方法，并提供方法体。若没有重写全部的抽象方法，仍为抽象类。
+>
+> 假设创建了抽象类的对象，调用抽象的方法，而抽象方法没有具体的方法体，没有意义。
+
+2、抽象类中，也有构造方法，是供子类创建对象时，初始化父类成员变量使用的。
+
+> 子类的构造方法中，有默认的 super() 或手动的 super(实参列表)，需要访问父类构造方法。
+
+3、抽象类中，不一定包含抽象方法，但是有抽象方法的类必定是抽象类。
+
+> 未包含抽象方法的抽象类，目的就是不想让调用者创建该类对象，通常用于某些特殊的类结构设计。
+
+4、抽象类的子类，必须重写抽象父类中**所有的**抽象方法，否则，编译无法通过而报错。除非该子类也是抽象类。 
+
+> 假设不重写所有抽象方法，则类中可能包含抽象方法。那么创建对象后，调用抽象的方法，没有意义。
+
+### 20.4 注意事项
+
+1、不能用 abstract 修饰变量、代码块、构造器。
+
+2、不能用 abstract 修饰私有方法、静态方法、final 的方法、final 的类。
+
+## 21. 接口（interface）
+
+### 21.1 概述
+
+接口就是规范，定义的是一组规则，体现了现实世界中“如果你是/要...则必须能...”的思想。继承是一个"是不是"的 `is-a` 关系，而接口实现则是 "能不能"的 `has-a` 关系。
+
+例如：电脑都预留了可以插入 USB 设备的 USB 接口，USB 接口具备基本的数据传输的开启功能和关闭功能。你能不能用 USB 进行连接，或是否具备 USB 通信功能，就看你能否遵循 USB 接口规范。
+
+### 21.2 语法格式
+
+接口的定义，它与定义类方式相似，但是使用 `interface` 关键字。它也会被编译成 .class 文件，但一定要明确它并不是类，而是另外一种引用数据类型。
+
+引用数据类型：数组，类，枚举，接口，注解。
+
+**接口的声明格式**
+
+```java
+[修饰符] interface 接口名{
+    // 接口的成员列表：
+    // 公共的静态常量
+    // 公共的抽象方法
+    
+    // 公共的默认方法（JDK1.8以上）
+    // 公共的静态方法（JDK1.8以上）
+    // 私有方法（JDK1.9以上）
+}
+```
+
+```java
+public interface USB3{
+    //静态常量
+    [public] [static] [final] long MAX_SPEED = 500*1024*1024; //500MB/s
+
+    //抽象方法
+    [public] [abstract] void in();
+    [public] [abstract] void out();
+
+    //默认方法
+    [public] default void start(){
+        System.out.println("开始");
+    }
+    [public] default void stop(){
+        System.out.println("结束");
+    }
+
+    //静态方法
+    [public] static void show(){
+        System.out.println("USB 3.0可以同步全速地进行读写操作");
+    }
+}
+```
+
+在 JDK8.0 之前，接口中只允许出现：
+
+1、公共的静态的常量：其中 public static final 可以省略。
+
+2、公共的抽象的方法：其中 public abstract 可以省略。
+
+在 JDK8.0 时，接口中允许声明`默认方法`和`静态方法`：
+
+3、公共的默认的方法：其中 public 可以省略，建议保留，但是 default 不能省略。
+
+4、公共的静态的方法：其中 public 可以省略，建议保留，但是 static 不能省略。
+
+在 JDK9.0 时，接口又增加了：
+
+5、私有方法。
+
+除此之外，接口中没有构造器，没有初始化块，因为接口中没有成员变量需要动态初始化。
+
+### 21.3 使用规则
+
+**1、类实现接口（implements）**
+
+接口不能创建对象，但是可以被类实现（`implements` ，类似于被继承）。
+
+类与接口的关系为实现关系，即类实现接口，该类可以称为接口的实现类。实现的动作类似继承，格式相仿，只是关键字不同，实现使用 ` implements` 关键字。
+
+```java
+[修饰符] class 实现类 extends 父类 implements 接口{
+    // 重写接口中抽象方法[必须]，当然如果实现类是抽象类，那么可以不重写
+  	// 重写接口中默认方法[可选]
+}
+```
+
+注意
+
+- 如果接口的实现类是非抽象类，那么必须 `重写接口中所有抽象方法`。
+
+- 默认方法可以选择保留，也可以重写。
+
+- 接口中的静态方法不能被继承也不能被重写。
+
+```java
+interface USB{		// 
+	public void start() ;
+	public void stop() ;	
+}
+class Computer{
+	public static void show(USB usb){	
+		usb.start() ;
+		System.out.println("=========== USB 设备工作 ========") ;
+		usb.stop() ;
+	}
+};
+class Flash implements USB{
+	public void start(){	// 重写方法
+		System.out.println("U盘开始工作。") ;
+	}
+	public void stop(){		// 重写方法
+		System.out.println("U盘停止工作。") ;
+	}
+};
+class Print implements USB{
+	public void start(){	// 重写方法
+		System.out.println("打印机开始工作。") ;
+	}
+	public void stop(){		// 重写方法
+		System.out.println("打印机停止工作。") ;
+	}
+};
+public class InterfaceDemo{
+	public static void main(String args[]){
+		Computer.show(new Flash()) ;
+		Computer.show(new Print()) ;
+
+		c.show(new USB(){
+			public void start(){
+				System.out.println("移动硬盘开始运行");
+			}
+			public void stop(){
+				System.out.println("移动硬盘停止运行");
+			}
+		});
+	}
+};
+```
+
+**2、接口的多实现（implements）**
+
+在继承体系中，一个类只能继承一个父类。而对于接口而言，一个类是可以实现多个接口的，这叫做接口的 `多实现`。
+
+```java
+[修饰符] class 实现类 extends 父类 implements 接口1，接口2，接口3。。。{
+    // 重写接口中所有抽象方法[必须]，当然如果实现类是抽象类，那么可以不重写
+  	// 重写接口中默认方法[可选]
+}
+```
+
+有多个抽象方法时，实现类必须重写所有抽象方法。**如果抽象方法有重名的，只需要重写一次**。
+
+```java
+interface A {
+    void showA();
+}
+
+interface B {
+    void showB();
+}
+
+class C implements A, B {
+    @Override
+    public void showA() {
+        System.out.println("showA");
+    }
+
+    @Override
+    public void showB() {
+        System.out.println("showB");
+    }
+}
+
+class TestC {
+    public static void main(String[] args) {
+        C c = new C();
+        c.showA();
+        c.showB();
+    }
+}
+```
+
+**3、接口的多继承（extends）**
+
+一个接口能继承另一个或者多个接口，接口的继承也使用  `extends` 关键字，子接口继承父接口的方法。
+
+```java
+interface Chargeable {
+    void charge();
+
+    void in();
+
+    void out();
+}
+
+interface UsbC extends Chargeable, USB3 {
+    void reverse();
+}
+
+class TypeCConverter implements UsbC {
+    @Override
+    public void reverse() {
+        System.out.println("正反面都支持");
+    }
+
+    @Override
+    public void charge() {
+        System.out.println("可充电");
+    }
+
+    @Override
+    public void in() {
+        System.out.println("接收数据");
+    }
+
+    @Override
+    public void out() {
+        System.out.println("输出数据");
+    }
+}
+```
+
+**4、接口与实现类对象构成多态引用**
+
+实现类实现接口，类似于子类继承父类，因此，接口类型的变量与实现类的对象之间，也可以构成多态引用。通过接口类型的变量调用方法，最终执行的是你 new 的实现类对象实现的方法体。
+
+```java
+public class Mouse implements USB3 {
+    @Override
+    public void out() {
+        System.out.println("发送脉冲信号");
+    }
+
+    @Override
+    public void in() {
+        System.out.println("不接收信号");
+    }
+}
+```
+
+```java
+public class KeyBoard implements USB3{
+    @Override
+    public void in() {
+        System.out.println("不接收信号");
+    }
+
+    @Override
+    public void out() {
+        System.out.println("发送按键信号");
+    }
+}
+```
+
+```java
+public class TestComputer {
+    public static void main(String[] args) {
+        Computer computer = new Computer();
+        USB3 usb = new Mouse();
+        computer.setUsb(usb);
+        usb.start();
+        usb.out();
+        usb.in();
+        usb.stop();
+        System.out.println("--------------------------");
+
+        usb = new KeyBoard();
+        computer.setUsb(usb);
+        usb.start();
+        usb.out();
+        usb.in();
+        usb.stop();
+        System.out.println("--------------------------");
+
+        usb = new MobileHDD();
+        computer.setUsb(usb);
+        usb.start();
+        usb.out();
+        usb.in();
+        usb.stop();
+    }
+}
+```
+
+**5、使用接口的静态成员**
+
+接口不能直接创建对象，但是可以通过接口名直接调用接口的静态方法和静态常量。
+
+接口的静态成员不能通过实现类的对象进行调用。
+
+```java
+public class TestUSB3 {
+    public static void main(String[] args) {
+        //接口名.静态方法 (JDK8.0才能开始使用)
+        USB3.show();
+        //接口名.静态常量
+        System.out.println(USB3.MAX_SPEED);
+    }
+}
+```
+
+**6、使用接口的非静态方法**
+
+对于接口的抽象方法、默认方法，只能通过实现类对象才可以调用。
+
+```java
+public class TestTypeCConverter {
+    public static void main(String[] args) {
+        //创建实现类对象
+        TypeCConverter b = new TypeCConverter();
+
+        //通过实现类对象调用重写的抽象方法，以及接口的默认方法，如果实现类重写了就执行重写的默认方法，如果没有重写，就执行接口中的默认方法
+        b.start();
+        b.in();
+        b.stop();
+
+        //通过接口名调用接口的静态方法
+        //TypeCConverter.show(); //编译报错
+        //b.show(); //编译报错
+        USB3.show();
+    }
+}
+```
+
+### 21.4 相关冲突
+
+**1、父类与接口默认方法冲突问题**
+
+此时子类非必须重写，默认是父类方法。
+
+```java
+interface I1 {
+    default void test() {
+        System.out.println("I1");
+    }
+}
+
+class F1 {
+    public void test() {
+        System.out.println("F1");
+    }
+}
+
+class S1 extends F1 implements I1 {
+
+    @Override
+    public void test() {
+        //默认是父类
+        super.test(); //F1
+        //也可以调用接口中的
+        I1.super.test(); //I1
+        //也可以完全重写
+        System.out.println("S1"); //S1
+    }
+}
+
+class T1 {
+    public static void main(String[] args) {
+        S1 s1 = new S1();
+        s1.test();
+    }
+}
+```
+
+**2、接口与接口默认方法冲突问题**
+
+此时子类必须重写。
+
+```java
+interface I1 {
+    default void test() {
+        System.out.println("I1");
+    }
+}
+
+interface I2 {
+    default void test() {
+        System.out.println("I2");
+    }
+}
+
+class S1 implements I1, I2 {
+
+    @Override
+    public void test() {
+        I1.super.test(); //I1
+        I2.super.test(); //I2
+        System.out.println("S1"); //S1
+    }
+}
+
+class T1 {
+    public static void main(String[] args) {
+        S1 s1 = new S1();
+        s1.test();
+    }
+}
+```
+
+**3、常量冲突问题**
+
+此时子类调用时必须指定变量属于谁。
+
+```java
+interface I1 {
+    int x = 1;
+}
+
+interface I2 {
+    int x = 2;
+}
+
+class F1{
+    int x = 3;
+}
+
+class S1 extends F1 implements I1, I2 {
+
+    public void test() {
+        //System.out.println(x); //编译报错 模糊不清
+        System.out.println(I1.x); //1
+        System.out.println(I2.x); //2
+        System.out.println(super.x); //3
+    }
+}
+
+class T1 {
+    public static void main(String[] args) {
+        S1 s1 = new S1();
+        s1.test();
+    }
+}
+```
+
+### 21.5 抽象类与接口对比
+
+![image-20220328002053452](pictures/image-20220328002053452.png)
+
+## 22. 内部类（InnerClass)
+
+### 22.1 概述
+
+将一个 类B 定义在另一个 类A 里面，里面的那个 类B 就称为 `内部类（InnerClass）`，类A 则称为 `外部类（OuterClass）`。
+
+**为什么要声明内部类**
+
+当一个事物A的内部，还有一个部分需要一个完整的结构B进行描述，而这个内部的完整的结构B又只为外部事物A提供服务，不在其他地方单独使用，那么整个内部的完整结构B最好使用内部类。
+
+**内部类的分类**
+
+根据内部类声明的位置（如同变量的分类），我们可以分为：
+
+![image-20221124223912529](pictures/image-20221124223912529.png)
+
+### 22.2 成员内部类
+
+如果成员内部类中不使用外部类的非静态成员，那么通常将内部类声明为静态内部类，否则声明为非静态内部类。
+
+**语法格式**
+
+```java
+[修饰符] class 外部类{
+    [其他修饰符] [static] class 内部类{
+    }
+}
+```
+
+**成员内部类作为类的成员的角色**
+
+1、和外部类不同，Inner class 还可以声明为 private 或 protected。
+
+2、可以调用外部类的结构。（注意：在静态内部类中不能使用外部类的非静态成员）
+
+3、Inner class 可以声明为 static 的，但此时就不能再使用外层类的非 static 的成员变量。
+
+**成员内部类作为类的角色**
+
+1、可以在内部定义属性、方法、构造器等结构。
+
+2、可以继承自己的想要继承的父类，实现自己想要实现的父接口们，和外部类的父类和父接口无关。
+
+3、可以声明为 abstract 类 ，因此可以被其它的内部类继承。
+
+4、可以声明为 final 的，表示不能被继承。
+
+5、编译以后生成 OuterClass$InnerClass.class 字节码文件（也适用于局部内部类）。
+
+**注意点**
+
+1、外部类访问成员内部类的成员，需要 `内部类.成员` 或 `内部类对象.成员` 的方式。
+
+2、成员内部类可以直接使用外部类的所有成员，包括私有的数据。
+
+3、当想要在外部类的静态成员部分使用内部类时，可以考虑内部类声明为静态的。
+
+**实例化成员内部类**
+
+```java
+//静态内部类
+外部类名.静态内部类名 变量 = 外部类名.静态内部类名();
+变量.非静态方法();
+
+//非静态内部类
+外部类名 变量1 = new 外部类();
+外部类名.非静态内部类名 变量2 = 变量1.new 非静态内部类名();
+变量2.非静态方法();
+```
+
+```java
+public class Out {
+
+    class Inner{
+
+    }
+
+    static class StaticInner{
+
+    }
+}
+
+class Test{
+    public static void main(String[] args) {
+        Out.StaticInner staticInner = new Out.StaticInner();
+
+        Out.Inner inner = new Out().new Inner();
+    }
+}
+```
+
+### 22.3 局部内部类
+
+**语法格式**
+
+```java
+[修饰符] class 外部类{
+    [修饰符] 返回值类型  方法名(形参列表){
+            [final/abstract] class 内部类{
+    	}
+    }    
+}
+```
+
+**说明**
+
+1、编译后有自己的独立的字节码文件，只不过在内部类名前面冠以外部类名、$符号、编号。
+
+2、和成员内部类不同的是，它前面不能有权限修饰符等。
+
+3、局部内部类如同局部变量一样，有作用域。
+
+4、局部内部类中是否能访问外部类的非静态的成员，取决于所在的方法。

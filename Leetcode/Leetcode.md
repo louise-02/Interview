@@ -1,6 +1,6 @@
 # 1. [两数之和](https://leetcode.cn/problems/two-sum/description/)『数组 哈希表』
 
-**1、暴力解**
+## **1、暴力解**
 
 时间复杂度：O(N^2)
 
@@ -19,7 +19,7 @@ public int[] twoSum(int[] nums, int target) {
 }
 ```
 
-**2、哈希表**
+## **2、哈希表**
 
 时间复杂度：O(N)
 
@@ -54,7 +54,7 @@ public int[] twoSum1(int[] nums, int target) {
  */
 ```
 
-**迭代**
+## **1、迭代**
 
 ```java
 public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
@@ -85,7 +85,7 @@ public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
 }
 ```
 
-**递归**
+## **2、递归**
 
 ```java
 public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
@@ -106,9 +106,9 @@ public ListNode addTwoNumbers1(ListNode l1, ListNode l2, int up) {
 }
 ```
 
-# 3.[无重复字符的最长子串](https://leetcode.cn/problems/longest-substring-without-repeating-characters/description/)『字符串 滑动窗口』
+# 3. [无重复字符的最长子串](https://leetcode.cn/problems/longest-substring-without-repeating-characters/description/)『字符串 滑动窗口』
 
-1、**滑动窗口**
+## **1、滑动窗口**
 
 定义左右指针，右指针在添加的时候如何发现有重复内容就去掉左指针所在位置的字符。
 
@@ -135,4 +135,57 @@ public int lengthOfLongestSubstring(String s) {
 }
 ```
 
-# 4.[寻找两个正序数组的中位数](https://leetcode.cn/problems/median-of-two-sorted-arrays/)『数组 二分』
+# 4. [寻找两个正序数组的中位数](https://leetcode.cn/problems/median-of-two-sorted-arrays/)『数组 二分』
+
+## **1、合并数组**
+
+时间复杂度：O(m+n)
+
+## **2、模拟合并数组**
+
+时间复杂度：O(m+n)
+
+合并后数组长度为 len，如果合并后为奇数，那就取第 len/2 即可，如果是偶数，那就取第 len/2 和前一位数。
+
+```java
+public double findMedianSortedArrays(int[] nums1, int[] nums2) {
+    //用来记录两个数组左索引
+    int n1l = 0, n2l = 0;
+
+    int mid = (nums1.length + nums2.length) / 2;
+
+    //定义最终取到的中位数，奇数取 r，偶数取 (l+r)/2
+    int l = 0, r = 0;
+
+    for (int i = 0; i <= mid; i++) {
+        l = r;
+        if (n1l < nums1.length && n2l < nums2.length) {
+            if (nums1[n1l] < nums2[n2l]) {
+                r = nums1[n1l++];
+            } else {
+                r = nums2[n2l++];
+            }
+        } else if (n1l >= nums1.length) {
+            r = nums2[n2l++];
+        } else {
+            r = nums1[n1l++];
+        }
+    }
+
+    if ((nums1.length + nums2.length) % 2 == 0) {
+        return (l + r) / 2.0;
+    } else {
+        return r;
+    }
+}
+```
+
+## **3、二分法**（待写）
+
+# 5. [最长回文子串](https://leetcode.cn/problems/longest-palindromic-substring/solutions/255195/zui-chang-hui-wen-zi-chuan-by-leetcode-solution/)『字符串 动态规划』
+
+1、中心扩展算法
+
+2、动态规划
+
+3、
