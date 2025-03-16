@@ -501,3 +501,14 @@ git push --set-upstream origin master
 | Push/pull 操作更快                     | Push/pull 操作较慢                 |
 | 工程可以用 commit 自动共享             | 没有任何东西自动共享               |
 
+# 强制覆盖Git本地代码
+
+```
+//从远程仓库获取所有分支的更新，但不会自动合并或重置本地代码。
+git fetch --all
+//重置本地master分支到远程仓库的状态，这意味着本地所有未提交的更改都会被覆盖。
+git reset --hard origin/master
+//虽然在执行了上面的重置命令后不是必需的，但这个命令会再次更新代码，确保本地是最新的。
+git pull
+```
+

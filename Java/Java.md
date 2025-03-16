@@ -113,6 +113,8 @@ java HelloWorld
  */
 ```
 
+
+
 # 第二章 变量与运算符
 
 ## 1. 关键字（keyword）
@@ -999,6 +1001,10 @@ Unicode 是字符集，UTF-8、UTF-16、UTF-32是三种将**数字转换到程�
 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
 ```
 
+
+
+
+
 # 第三章 流程控制语句
 
 ## 1. 顺序结构
@@ -1346,6 +1352,10 @@ Math.random() * 100  =>  [0,100)
 //获取 [a,b] 范围内的随机整数
 (int)(Math.random() * (b - a + 1)) + a
 ```
+
+
+
+
 
 # 第四章 数组
 
@@ -1771,6 +1781,10 @@ int[][] arr = {
 3、static void fill(int[] a, int fromIndex, int toIndex, int val)：将a数组[fromIndex,toIndex)部分填充为val值
 
 4、static void fill(Object[] a, int fromIndex, int toIndex, Object val) ：将a数组[fromIndex,toIndex)部分填充为val对象
+
+
+
+
 
 # 第五章 面向对象编程
 
