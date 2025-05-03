@@ -1,0 +1,288 @@
+# 1、kafka 下载
+
+[Kafka官网](https://kafka.apache.org/downloads) 中选择 Binary download 获取包。
+
+# 2、集群规划
+
+规划为三台机器 hadoop000 hadoop001 hadoop002
+
+解压安装包
+
+`tar -zxvf kafka_2.12-3.0.0.tgz -C /opt/module/`
+
+修改解压后的文件名称
+
+`mv kafka_2.12-3.0.0/ kafka`
+
+# 3、配置文件修改
+
+## 3.1、zookeeper 配置文件修改
+
+修改 zookeeper.properties
+
+`vi /opt/module/kafka/config/zookeeper.properties`
+
+```bash
+//数据地址
+dataDir=/opt/datas/kafka/zookeeper
+maxClientCnxns=100
+tickTime=20
+initLimit=10
+syncLimit=5
+//集群配置
+server.1=hadoop001:2888:3888
+server.2=hadoop002:2888:3888
+server.3=hadoop003:2888:3888
+
+//在dataDir下创建myid文件 添加 1 2 3
+//server.x 对应机器的myid
+```
+
+## 3.2、kafka 配置文件修改
+
+修改 server.properties
+
+`vi /opt/module/kafka/config/server.properties`
+
+```bash
+#broker 的全局唯一编号，不能重复，只能是数字。每台机器不一样 三台机器可以设置为 1 2 3
+broker.id=0
+#处理网络请求的线程数量
+num.network.threads=3
+#用来处理磁盘 IO 的线程数量
+num.io.threads=8
+#发送套接字的缓冲区大小
+socket.send.buffer.bytes=102400
+#接收套接字的缓冲区大小
+socket.receive.buffer.bytes=102400
+#请求套接字的缓冲区大小
+socket.request.max.bytes=104857600
+#kafka 运行日志(数据)存放的路径，路径不需要提前创建，kafka 自动帮你创建，可以
+配置多个磁盘路径，路径与路径之间可以用"，"分隔
+log.dirs=/opt/module/kafka/datas
+#topic 在当前 broker 上的分区个数
+num.partitions=1
+#用来恢复和清理 data 下数据的线程数量
+num.recovery.threads.per.data.dir=1
+# 每个 topic 创建时的副本数，默认时 1 个副本
+offsets.topic.replication.factor=1
+#segment 文件保留的最长时间，超时将被删除
+log.retention.hours=168
+#每个 segment 文件的大小，默认最大 1G
+log.segment.bytes=1073741824
+# 检查过期数据的时间，默认 5 分钟检查一次是否数据过期
+log.retention.check.interval.ms=300000
+# 监听地址
+listeners=PLAINTEXT://0.0.0.0:9092
+# 对外公布的地址 ip为本机真实ip
+advertised.listeners=PLAINTEXT://ip:9092
+#配置连接 Zookeeper 集群地址（在 zk 根目录下创建/kafka，方便管理）
+zookeeper.connect=hadoop102:2181,hadoop103:2181,hadoop104:2181/kafka
+```
+
+# 4、集群分发脚本
+
+进入目录
+
+`cd /opt`
+
+创建脚本
+
+`vi xsync`
+
+```bash
+#!/bin/bash
+
+#1. 判断参数个数
+if [ $# -lt 1 ]
+then
+    echo Not Enough Arguement!
+    exit;
+fi
+
+#2. 遍历集群所有机器
+for host in hadoop000 hadoop001 hadoop002
+do
+    echo ====================  $host  ====================
+    #3. 遍历所有目录，挨个发送
+
+    for file in $@
+    do
+        #4. 判断文件是否存在
+        if [ -e $file ]
+            then
+                #5. 获取父目录
+                pdir=$(cd -P $(dirname $file); pwd)
+
+                #6. 获取当前文件的名称
+                fname=$(basename $file)
+                ssh $host "mkdir -p $pdir"
+                rsync -av $pdir/$fname $host:$pdir
+            else
+                echo $file does not exists!
+        fi
+    done
+done
+```
+
+对脚本授权
+
+`chmod +755 xsync`
+
+进行集群分发
+
+`xsync module/kafka/`
+
+# 5、环境变量配置
+
+创建 Kafka 环境变量配置文件
+
+`vim /etc/profile.d/my_env.sh`
+
+```bash
+#KAFKA_HOME
+export KAFKA_HOME=/opt/module/kafka
+export PATH=$PATH:$KAFKA_HOME/bin
+```
+
+刷新环境变量
+
+`source /etc/profile`
+
+# 6、启动集群
+
+## 6.1、启动 zookeeper
+
+在 bin 目录下启动
+
+`cd /opt/module/kafka/bin/`
+
+启动 zookeeper
+
+`./zookeeper-server-start.sh -daemon ../config/zookeeper.properties`
+
+关闭 zookeeper
+
+`./zookeeper-server-stop.sh`
+
+正常启动后 2181 3888 三台机器端口都会被占用，其中一台 2888 端口被占用，是 leader 节点。
+
+## 6.2、启动 kafka
+
+在 kafka 目录下启动
+
+`cd /opt/module/kafka`
+
+启动 kafka
+
+`bin/kafka-server-start.sh -daemon config/server.properties`
+
+关闭 kafka
+
+`bin/kafka-server-stop.sh`
+
+## 6.3、注意事项
+
+停止 kafka 集群时，一定要等 kafka 所有节点进程全部停止后再停止 zookeeper 集群。因为 zookeeper 集群当中记录着 kafka 集群相关信息，zookeeper 集群一旦先停止，kafka 集群就没有办法再获取停止进程的信息，只能手动杀死 kafka 进程了。
+
+## 6.4、常见问题
+
+```
+//问题1
+The Cluster ID VB7m6OM6SwS5oNJXn20XUA doesn't match stored clusterId
+//解决1
+删除 server.properties 中 log.dirs 的所有文件
+
+//问题2
+Cannot open channel to 2 at election address
+//解决2
+检查各节点的防火墙有没有关闭||检查各节点/etc/hosts内容是否一致
+```
+
+# 7、kafka 测试
+
+## 7.1、topic
+
+查看操作主题命令行参数
+
+`kafka-topics.sh`
+
+```
+--bootstrap-server <String: server toconnect to> 连接的 Kafka Broker 主机名称和端口号。
+--topic <String: topic> 操作的 topic 名称。
+--create 创建主题。
+--delete 删除主题。
+--alter 修改主题。
+--list 查看所有主题。
+--describe 查看主题详细描述。
+--partitions <Integer: # of partitions> 设置分区数。
+--replication-factor<Integer: replication factor> 设置分区副本。
+--config <String: name=value> 更新系统默认的配置。
+```
+
+查看当前服务器中的所有 topic
+
+`kafka-topics.sh --bootstrap-server hadoop000:9092 --list`
+
+创建 first topic，1分区3副本
+
+`kafka-topics.sh --bootstrap-server hadoop000:9092 --create --partitions 1 --replication-factor 3 --topic first`
+
+查看 first 主题的详情
+
+`kafka-topics.sh --bootstrap-server hadoop000:9092 --describe --topic first`
+
+修改分区数（注意：分区数只能增加，不能减少）
+
+`kafka-topics.sh --bootstrap-server hadoop000:9092 --alter --topic first --partitions 3`
+
+删除 topic
+
+`kafka-topics.sh --bootstrap-server hadoop000:9092 --delete --topic first`
+
+## 7.2、producer
+
+发送消息
+
+`kafka-console-producer.sh --bootstrap-server hadoop000:9092  --topic first`
+
+## 7.3、consumer
+
+查看操作消费者命令参数
+
+`kafka-console-consumer.sh`
+
+```
+--bootstrap-server <String: server toconnect to> 连接的 Kafka Broker 主机名称和端口号。
+--topic <String: topic> 操作的 topic 名称。
+--from-beginning 从头开始消费。
+--group <String: consumer group id> 指定消费者组名称。
+```
+
+消费 first 主题中的数据
+
+`kafka-console-consumer.sh --bootstrap-server hadoop000:9092 --topic first`
+
+把主题中所有的数据都读取出来，包括历史数据
+
+`kafka-console-consumer.sh --bootstrap-server hadoop000:9092 --from-beginning --topic first`
+
+## 7.4、consumer groups
+
+查看消费者组命令命令
+
+`kafka-consumer-groups.sh`
+
+```
+--bootstrap-server <String: server toconnect to> 连接的 Kafka Broker 主机名称和端口号。
+--describe 查看主题详细描述。
+--group <String: consumer group id> 指定消费者组名称。
+```
+
+查看所有的 group
+
+`./kafka-consumer-groups.sh --bootstrap-server hadoop000:9092 --list`
+
+查看 my-group 消费者组的偏移量
+
+`./kafka-consumer-groups.sh --bootstrap-server hadoop000:9092 --group my-group --describe`

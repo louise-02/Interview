@@ -52,7 +52,7 @@ import org.springframework.stereotype.Service;
  * ${NAME}
  * 
  * @author louise
- * @date ${DATE}
+ * @since ${DATE}
  */
 #if($NAME.endsWith("Controller"))
 @RestController 
@@ -91,7 +91,7 @@ public class ${NAME} {
  * ${NAME}
  * 
  * @author louise
- * @date ${DATE}
+ * @since ${DATE}
  */
 public interface ${NAME} {
 }
@@ -106,7 +106,7 @@ public interface ${NAME} {
  * ${NAME}
  * 
  * @author louise
- * @date ${DATE}
+ * @since ${DATE}
  */
 public enum ${NAME} {
 }
