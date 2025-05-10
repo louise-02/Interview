@@ -104,6 +104,7 @@ sudo yum remove -y \
     containerd.io \       # 容器运行时
     docker-buildx-plugin  # Docker 多架构构建插件（如果存在）
 
+
 # 删除残留数据和配置文件
 镜像、容器、卷等数据默认存储在 /var/lib/docker
 sudo rm -rf /var/lib/docker     # Docker 主数据目录

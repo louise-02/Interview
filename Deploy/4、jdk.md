@@ -1,6 +1,6 @@
-# 1、yum 安装
+# yum 安装
 
-## 1.1、安装
+## 1、安装
 
 安装 jdk
 
@@ -17,7 +17,7 @@ sudo apt install openjdk-8-jdk -y
 java -version
 ```
 
-## 1.2、卸载
+## 2、卸载
 
 ```bash
 sudo yum remove java-1.8.0-openjdk java-1.8.0-openjdk-headless
@@ -35,7 +35,7 @@ openjdk-*
 oracle-java*
 ```
 
-## 1.3、说明
+## 3、说明
 
 | 类型       | 路径                                               | 说明                     |
 | ---------- | -------------------------------------------------- | ------------------------ |
@@ -47,4 +47,44 @@ oracle-java*
 | 符号链接   | /usr/bin/java                                      |                          |
 | 符号链接   | /usr/bin/javac                                     |                          |
 
-2、
+# 二进制包安装
+
+## 1、安装
+
+上传 tar 包，以 `jdk-8u391-linux-x64.tar.gz` 为例
+
+```bash
+cd /opt/jdk
+
+tar -zxvf jdk-8u391-linux-x64.tar.gz
+```
+
+## 2、配置环境变量
+
+创建自己的配置文件
+
+```bash
+vi /etc/profile.d/my_env.sh
+```
+
+配置以下内容
+
+```bash
+#!/bin/bash
+
+export JAVA_HOME=/opt/jdk/jdk1.8.0_391
+export PATH=$JAVA_HOME/bin:$PATH
+```
+
+刷新配置
+
+```bash
+source /etc/profile
+```
+
+验证版本
+
+```bash
+java -version
+```
+

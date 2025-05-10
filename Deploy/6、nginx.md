@@ -178,3 +178,56 @@ http {
 ```bash
 /usr/local/webserver/nginx/sbin/nginx -s stop
 ```
+
+## 5、注册服务
+
+修改配置
+
+```bash
+sudo vim /etc/systemd/system/nginx.service
+```
+
+内容如下
+
+```bash
+[Unit]
+Description=Custom Nginx
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/webserver/nginx/sbin/nginx
+ExecReload=/usr/local/webserver/nginx/sbin/nginx -s reload
+ExecStop=/usr/local/webserver/nginx/sbin/nginx -s quit
+PIDFile=/usr/local/webserver/nginx/logs/nginx.pid
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
+```
+
+启动服务
+
+```bash
+# 重新加载 systemd 配置
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+
+# 设置开机自启
+sudo systemctl enable nginx
+
+# 启动 nginx
+sudo systemctl start nginx
+
+# 查看状态
+systemctl status nginx
+
+# 重新加载配置
+sudo systemctl reload nginx
+```
+
+
+
+
+
