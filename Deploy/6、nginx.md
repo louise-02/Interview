@@ -1,4 +1,69 @@
-# CentOS 安装
+# yum 安装
+
+## 1、安装
+
+安装 EPEL 仓库
+
+```bash
+sudo yum install epel-release
+```
+
+安装 Nginx
+
+```bash
+sudo yum install nginx
+```
+
+启动 Nginx 服务
+
+```bash
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+检查 Nginx 服务是否正在运行
+
+```bash
+sudo systemctl status nginx
+```
+
+调整防火墙设置
+
+```bash
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+```
+
+## 2、卸载
+
+停止 Nginx 服务
+
+```bash
+sudo systemctl stop nginx
+```
+
+卸载 Nginx
+
+```bash
+sudo yum remove nginx
+```
+
+清理残留的配置文件和数据
+
+```bash
+sudo rm -rf /etc/nginx
+sudo rm -rf /var/log/nginx
+sudo rm -rf /usr/share/nginx
+```
+
+检查 Nginx 是否已卸载
+
+```bash
+nginx -v
+```
+
+# 编译 安装
 
 ## 1、安装库
 
@@ -204,7 +269,6 @@ PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
-
 ```
 
 启动服务
@@ -227,7 +291,27 @@ systemctl status nginx
 sudo systemctl reload nginx
 ```
 
+# nginx
 
+## 1、yum 安装目录
 
+| 类型           | 路径                                    | 说明                                       |
+| -------------- | --------------------------------------- | ------------------------------------------ |
+| 📄 主程序       | `/usr/sbin/nginx`                       | Nginx 可执行文件                           |
+| 📁 配置文件     | `/etc/nginx/`                           | 主配置目录，包含 `nginx.conf` 和 `conf.d/` |
+| 📁 默认网页     | `/usr/share/nginx/html/`                | 默认网页目录，含 `index.html` 等           |
+| 📁 服务控制脚本 | `/usr/lib/systemd/system/nginx.service` | 用于 systemd 管理 Nginx                    |
+| 📁 日志目录     | `/var/log/nginx/`                       | 存放访问日志和错误日志                     |
+| 📁 模块库       | `/usr/lib64/nginx/`                     | 一些动态模块（`.so` 文件）所在目录         |
+| 📁 缓存临时目录 | `/var/cache/nginx/`                     | Nginx 的临时缓存目录                       |
 
+## 2、编译安装目录
 
+假设没有指定 `--prefix`，默认路径为 `/usr/local/nginx` ，文件都在此目录，不污染系统其他位置。
+
+| 类型       | 路径                               | 说明                                       |
+| ---------- | ---------------------------------- | ------------------------------------------ |
+| 📄 主程序   | `/usr/local/nginx/sbin/nginx`      | Nginx 可执行文件                           |
+| 📁 配置文件 | `/usr/local/nginx/conf/nginx.conf` | 主配置目录，包含 `nginx.conf` 和 `conf.d/` |
+| 📁 默认网页 | `/usr/local/nginx/html/`           | 默认网页目录，含 `index.html` 等           |
+| 📁 日志目录 | `/usr/local/nginx/logs/`           | 存放访问日志和错误日志                     |

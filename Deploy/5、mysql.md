@@ -88,7 +88,7 @@ vi /etc/yum.conf
 exclude=mysql*
 ```
 
-# 数据库设置
+# mysql
 
 ## 1、数据库初始化
 
@@ -109,11 +109,18 @@ update user set host='%' where user='root';
 FLUSH PRIVILEGES;
 ```
 
-## 2、常用配置文件路径
+## 2、yum 安装目录
 
-- 配置文件：`/etc/my.cnf`
-- 数据目录：`/var/lib/mysql`
-- 日志文件：`/var/log/mysqld.log`
+| 类型                         | 路径                                       | 说明                                       |
+| ---------------------------- | ------------------------------------------ | ------------------------------------------ |
+| 📄 主程序                     | `/usr/sbin/mysqld`                         | MySQL Server 可执行文件                    |
+| 📁 配置文件                   | `/etc/my.cnf`                              | MySQL 的主配置文件                         |
+| 📁 数据目录（首次启动后创建） | `/var/lib/mysql/`                          | 存放数据库数据、表、用户信息等             |
+| 📁 日志目录                   | `/var/log/mysqld.log`                      | MySQL 启动及运行日志（包括初始 root 密码） |
+| 📁 系统服务文件               | `/usr/lib/systemd/system/mysqld.service`   | 用于 systemd 启动 MySQL                    |
+| 📁 客户端工具                 | `/usr/bin/mysql`、`/usr/bin/mysqladmin` 等 | MySQL 客户端及管理工具                     |
+| 📁 库文件                     | `/usr/lib64/mysql/`                        | MySQL 相关动态库                           |
+| 📁 通用文件                   | `/usr/share/mysql/`                        | 包括错误信息、字符集、SQL 脚本等           |
 
 # 主从复制
 
