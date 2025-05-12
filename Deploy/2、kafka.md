@@ -2,6 +2,10 @@
 
 [Kafka官网](https://kafka.apache.org/downloads) 中选择 Binary download 获取包。
 
+3.0 版本以后建议使用 jdk11
+
+2.8 版本以前使用jdk8
+
 # 2、集群规划
 
 规划为三台机器 hadoop000 hadoop001 hadoop002
@@ -149,6 +153,26 @@ export PATH=$PATH:$KAFKA_HOME/bin
 
 `source /etc/profile`
 
+修改 kafka 内存占用
+
+```bash
+cd /opt/module/kafka/bin/
+vi kafka-server-start.sh
+
+# 找到此行并修改 32G 机器建议 8G
+export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G"
+```
+
+修改 zookeeper 内存占用
+
+```bash
+cd /opt/module/kafka/bin/
+vi zookeeper-server-start.sh
+
+# 找到此行并修改 32G 机器建议 2G
+export KAFKA_HEAP_OPTS="-Xmx512M -Xms512M"
+```
+
 # 6、启动集群
 
 ## 6.1、启动 zookeeper
@@ -286,3 +310,76 @@ Cannot open channel to 2 at election address
 查看 my-group 消费者组的偏移量
 
 `./kafka-consumer-groups.sh --bootstrap-server hadoop000:9092 --group my-group --describe`
+
+# 8、创建服务
+
+User 和 Group 可以根据需要添加
+
+zookeeper 服务
+
+```bash
+sudo tee /etc/systemd/system/zookeeper.service > /dev/null <<EOF
+[Unit]
+Description=Apache ZooKeeper Server
+After=network.target
+
+[Service]
+Type=simple
+User=zookeeper
+Group=zookeeper
+Environment=JAVA_HOME=/opt/jdk/jdk1.8.0_391
+Environment=PATH=$JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/opt/kafka/bin/zookeeper-server-start.sh /opt/kafka/config/zookeeper.properties
+ExecStop=/opt/kafka/bin/zookeeper-server-stop.sh
+Restart=on-failure
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+kafka 服务
+
+```bash
+sudo tee  /etc/systemd/system/kafka.service > /dev/null <<EOF
+[Unit]
+Description=Apache Kafka Server
+After=zookeeper.service
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+Environment=JAVA_HOME=/opt/jdk/jdk1.8.0_391
+Environment=PATH=$JAVA_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
+ExecStop=/opt/kafka/bin/kafka-server-stop.sh
+Restart=on-failure
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+启动服务
+
+```bash
+# 重新加载 systemd
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+
+# 启用 ZooKeeper 和 Kafka 服务（开机自动启动）
+sudo systemctl enable zookeeper
+sudo systemctl enable kafka
+
+# 启动服务
+sudo systemctl start zookeeper
+sudo systemctl start kafka
+
+# 查看状态
+sudo systemctl status zookeeper
+sudo systemctl status kafka
+```
+

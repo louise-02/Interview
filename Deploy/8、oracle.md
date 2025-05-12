@@ -141,6 +141,8 @@ net.core.wmem_max = 1048576
 fs.aio-max-nr = 1048576
 ```
 
+> kernel.sem 可以考虑改为 32000 1024000000 500 128
+
 执行 `sysctl -p` 使生效。
 
 编辑 `/etc/security/limits.conf`，追加：
@@ -148,9 +150,11 @@ fs.aio-max-nr = 1048576
 ```bash
 oracle   soft   nproc    2047
 oracle   hard   nproc    16384
-oracle   soft   nofile   1024
+oracle   soft   nofile   65536
 oracle   hard   nofile   65536
 oracle   soft   stack    10240
+oracle   soft   memlock  unlimited
+oracle   hard   memlock  unlimited
 ```
 
 设置 shell 环境（在 `/home/oracle/.bash_profile` 或 `/home/oracle/.bashrc` 中）：
@@ -201,6 +205,7 @@ unzip LINUX.X64_193000_db_home.zip -d $ORACLE_HOME
 
 ```bash
 su - oracle
+cp $ORACLE_HOME/install/response/db_install.rsp /home/oracle/db_install.rsp
 vi /home/oracle/db_install.rsp
 ```
 
@@ -247,7 +252,7 @@ su - root
 
 **7、配置监听器（Listener）**
 
-编辑或创建 `$ORACLE_HOME/network/admin/listener.ora`
+切换至 oracle 用户，编辑或创建 `$ORACLE_HOME/network/admin/listener.ora`
 
 ```bash
 LISTENER =
@@ -373,6 +378,8 @@ ALTER PLUGGABLE DATABASE ALL OPEN;
 ```
 
 **12、设置开机自启**
+
+切换至 root 用户
 
 创建监听器 systemd 服务
 
@@ -525,6 +532,47 @@ source /home/oracle/.bash_profile 或 source /etc/profile
 sudo rm -f /etc/oratab
 ```
 
+## 3、常见问题
+
+1、dbca 安装数据库时提示 SGA 大小问题
+
+```bash
+[WARNING] [DBT-11207] Specified SGA size is greater than the shmmax on the system. The database creation might fail with "ORA-27125 - Unable to create shared memory segment error".
+   ACTION: Specify SGA size lesser than or equal to the shmmax on the system.
+Prepare for db operation
+10% complete
+Copying database files
+12% complete
+[WARNING] ORA-27104: system-defined limits for shared memory was misconfigured
+
+[FATAL] ORA-01034: ORACLE not available
+
+40% complete
+100% complete
+[FATAL] ORA-01034: ORACLE not available
+
+10% complete
+0% complete
+Look at the log file "/u01/app/oracle/cfgtoollogs/dbca/ORCLCDB/ORCLCDB5.log" for further details.
+```
+
+root 用户修改配置
+
+如果没有指定 SGA_TARGET 或 SGA_MAX_SIZE，默认情况下 Oracle 会自动分配内存给 SGA，通常是服务器总内存的 30% 到 50% 左右。
+
+```bash
+vi /etc/sysctl.conf
+
+# 如服务器为32G内存 改为16G
+kernel.shmmax = 17179869184
+kernel.shmall = 4194304
+
+# 使配置生效
+sudo sysctl -p
+```
+
+
+
 # oracle
 
 ## 1、yum 安装目录
@@ -539,3 +587,46 @@ sudo rm -f /etc/oratab
 | 📁 监听配置         | `/opt/oracle/product/19c/dbhome_1/network/admin` | listener.ora、tnsnames.ora 所在目录         |
 | 📁 日志目录         | `/opt/oracle/diag/`                              | 各类日志文件，包括监听器和数据库告警日志    |
 | 🧪 环境变量建议文件 | `/home/oracle/.bash_profile`                     | 设置 `$ORACLE_HOME`、`$ORACLE_SID`、`$PATH` |
+
+## 3、创建授权用户
+
+以 VLMP_USER 用户和 VLMP 表空间为例。
+
+创建用户
+
+```sql
+CREATE USER VLMP_USER IDENTIFIED BY password;
+```
+
+分配表空间
+
+```bash
+ALTER USER VLMP_USER DEFAULT TABLESPACE VLMP;
+```
+
+授权
+
+```sql
+GRANT 
+  CREATE SESSION,         -- 连接数据库
+  CREATE TABLE,           -- 创建表
+  CREATE VIEW,            -- 创建视图
+  CREATE SEQUENCE,        -- 创建序列
+  CREATE PROCEDURE,       -- 创建存储过程/函数
+  CREATE TRIGGER,         -- 创建触发器
+  CREATE TYPE,            -- 创建用户定义类型
+  CREATE SYNONYM          -- 创建同义词
+TO VLMP_USER;
+```
+
+授权对此表空间的所有权限
+
+```sql
+ALTER USER VLMP_USER QUOTA UNLIMITED ON VLMP; -- 用户在表空间 VLMP 上没有存储限制
+```
+
+> **QUOTA**：表示用户在特定表空间上可以使用多少存储空间。
+>
+> **UNLIMITED**：表示该用户在 `VLMP` 表空间中没有存储空间限制，即可以使用该表空间的所有可用空间。
+>
+> **ON VLMP**：表示这个设置是针对表空间 `VLMP` 的。
