@@ -104,5 +104,19 @@ sudo rm -rf /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-serve
 | 📁 **表结构元数据** | `/var/lib/clickhouse/metadata/`                    | 存放数据库和表的结构定义                                     |
 | 📁 动态库目录       | `/usr/lib/clickhouse/` 或 `/usr/lib64/clickhouse/` | ClickHouse 依赖的共享库（按系统架构不同路径可能略有差异）    |
 
+## 3、新建用户授权
+
+```sql
+# 创建数据库
+CREATE DATABASE IF NOT EXISTS my_database;
+
+# 创建用户
+CREATE USER IF NOT EXISTS my_user
+IDENTIFIED WITH plaintext_password BY 'my_password';
+
+# 授权
+GRANT ALL ON my_database.* TO my_user;
+```
+
 
 

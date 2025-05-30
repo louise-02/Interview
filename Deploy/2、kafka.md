@@ -246,29 +246,29 @@ Cannot open channel to 2 at election address
 
 查看当前服务器中的所有 topic
 
-`kafka-topics.sh --bootstrap-server hadoop000:9092 --list`
+`kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list`
 
 创建 first topic，1分区3副本
 
-`kafka-topics.sh --bootstrap-server hadoop000:9092 --create --partitions 1 --replication-factor 3 --topic first`
+`kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --create --partitions 1 --replication-factor 3 --topic first`
 
 查看 first 主题的详情
 
-`kafka-topics.sh --bootstrap-server hadoop000:9092 --describe --topic first`
+`kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --describe --topic first`
 
 修改分区数（注意：分区数只能增加，不能减少）
 
-`kafka-topics.sh --bootstrap-server hadoop000:9092 --alter --topic first --partitions 3`
+`kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --alter --topic first --partitions 3`
 
 删除 topic
 
-`kafka-topics.sh --bootstrap-server hadoop000:9092 --delete --topic first`
+`kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --delete --topic first`
 
 ## 7.2、producer
 
 发送消息
 
-`kafka-console-producer.sh --bootstrap-server hadoop000:9092  --topic first`
+`kafka-console-producer.sh --bootstrap-server 127.0.0.1:9092  --topic first`
 
 ## 7.3、consumer
 
@@ -285,11 +285,11 @@ Cannot open channel to 2 at election address
 
 消费 first 主题中的数据
 
-`kafka-console-consumer.sh --bootstrap-server hadoop000:9092 --topic first`
+`kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic first`
 
 把主题中所有的数据都读取出来，包括历史数据
 
-`kafka-console-consumer.sh --bootstrap-server hadoop000:9092 --from-beginning --topic first`
+`kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --from-beginning --topic first`
 
 ## 7.4、consumer groups
 
@@ -305,11 +305,11 @@ Cannot open channel to 2 at election address
 
 查看所有的 group
 
-`./kafka-consumer-groups.sh --bootstrap-server hadoop000:9092 --list`
+`./kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --list`
 
 查看 my-group 消费者组的偏移量
 
-`./kafka-consumer-groups.sh --bootstrap-server hadoop000:9092 --group my-group --describe`
+`./kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --group my-group --describe`
 
 # 8、创建服务
 

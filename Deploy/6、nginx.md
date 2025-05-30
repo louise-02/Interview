@@ -78,21 +78,21 @@ yum -y install make zlib zlib-devel gcc-c++ libtool  openssl openssl-devel
 PCRE 作用是让 Nginx 支持 Rewrite 功能。
 
 ```bash
-cd /usr/local/src/
+mkdir -p /opt/src && cd /opt/src
 
-//下载
+# 下载
 wget http://downloads.sourceforge.net/project/pcre/pcre/8.35/pcre-8.35.tar.gz
 
-//解压
+# 解压
 tar zxvf pcre-8.35.tar.gz
 
-//编译安装
+# 编译安装
 cd pcre-8.35
-./configure
+./configure --prefix=/opt/pcre/8.35
 make && make install
 
-//查看版本
-pcre-config --version
+# 查看版本
+/opt/pcre/8.35/bin/pcre-config --version
 ```
 
 ## 2、安装 Nginx
@@ -100,21 +100,32 @@ pcre-config --version
 下载地址：https://nginx.org/en/download.html
 
 ```bash
-//下载
-cd /usr/local/src/
+# 下载
+mkdir -p /opt/src && cd /opt/src
 wget http://nginx.org/download/nginx-1.26.2.tar.gz
 
-//解压
+# 解压
 tar zxvf nginx-1.26.2.tar.gz
 
-//编译安装
+# 编译安装
 cd nginx-1.26.2
-./configure --prefix=/usr/local/webserver/nginx --with-http_stub_status_module --with-http_ssl_module --with-pcre=/usr/local/src/pcre-8.35
+./configure --prefix=/opt/nginx/1.26.2 --with-http_stub_status_module --with-http_ssl_module --with-pcre=/opt/src/pcre-8.35
 make
 make install
 
-//查看版本
-/usr/local/webserver/nginx/sbin/nginx -v
+# 设置 current 软链接
+ln -sfn /opt/nginx/1.26.2 /opt/nginx/current
+
+# 创建对应数据目录结构
+mkdir -p /data/nginx/1.26.2/{logs,run,tmp}
+ln -sfn /data/nginx/1.26.2 /data/nginx/current
+
+# 拷贝默认配置文件
+mv /opt/nginx/1.26.2/conf /data/nginx/1.26.2/
+mv /opt/nginx/1.26.2/html /data/nginx/1.26.2/
+
+# 查看版本
+/opt/nginx/current/sbin/nginx -v
 ```
 
 ## 3、配置 Nginx
@@ -122,7 +133,7 @@ make install
 修改配置文件
 
 ```bash
-vi /usr/local/webserver/nginx/conf/nginx.conf
+vi /data/nginx/current/conf/nginx.conf
 ```
 
 配置文件示例
@@ -131,8 +142,8 @@ vi /usr/local/webserver/nginx/conf/nginx.conf
 # 全局配置块
 user  nginx;                      # 运行用户
 worker_processes  auto;           # 工作进程数 (auto=自动匹配CPU核心数)
-error_log  /var/log/nginx/error.log warn;  # 错误日志路径
-pid        /var/run/nginx.pid;    # 进程PID文件
+error_log  logs/error.log warn;  # 错误日志路径
+pid        /data/nginx/current/run/nginx.pid;    # 进程PID文件
 
 events {
     worker_connections  1024;     # 单个工作进程最大连接数
@@ -155,7 +166,7 @@ http {
                       '$status $body_bytes_sent "$http_referer" '
                       '"$http_user_agent" "$http_x_forwarded_for"';
 
-    access_log  /var/log/nginx/access.log  main;  # 访问日志路径
+    access_log  logs/access.log  main;  # 访问日志路径
 
     # Gzip压缩配置
     gzip on;
@@ -215,7 +226,7 @@ http {
 校验配置文件
 
 ```bash
-/usr/local/webserver/nginx/sbin/nginx -t
+/opt/nginx/current/sbin/nginx -t -p /data/nginx/current/ -c conf/nginx.conf
 ```
 
 ## 4、启停 Nginx
@@ -223,25 +234,25 @@ http {
 启动
 
 ```bash
-/usr/local/webserver/nginx/sbin/nginx
+/opt/nginx/current/sbin/nginx -p /data/nginx/current/ -c conf/nginx.conf
 ```
 
 重新载入配置文件
 
 ```bash
-/usr/local/webserver/nginx/sbin/nginx -s reload
+/opt/nginx/current/sbin/nginx -s reload
 ```
 
 重启
 
 ```bash
-/usr/local/webserver/nginx/sbin/nginx -s reopen
+/opt/nginx/current/sbin/nginx -s reload -p /data/nginx/current/ -c conf/nginx.conf
 ```
 
 停止
 
 ```bash
-/usr/local/webserver/nginx/sbin/nginx -s stop
+/opt/nginx/current/sbin/nginx -s quit -p /data/nginx/current/ -c conf/nginx.conf
 ```
 
 ## 5、注册服务
@@ -261,10 +272,10 @@ After=network.target
 
 [Service]
 Type=forking
-ExecStart=/usr/local/webserver/nginx/sbin/nginx
-ExecReload=/usr/local/webserver/nginx/sbin/nginx -s reload
-ExecStop=/usr/local/webserver/nginx/sbin/nginx -s quit
-PIDFile=/usr/local/webserver/nginx/logs/nginx.pid
+ExecStart=/opt/nginx/current/sbin/nginx -p /data/nginx/current/ -c conf/nginx.conf
+ExecReload=/opt/nginx/current/sbin/nginx -s reload -p /data/nginx/current/ -c conf/nginx.conf
+ExecStop=/opt/nginx/current/sbin/nginx -s quit -p /data/nginx/current/ -c conf/nginx.conf
+PIDFile=/data/nginx/current/run/nginx.pid
 PrivateTmp=true
 
 [Install]
@@ -291,6 +302,26 @@ systemctl status nginx
 sudo systemctl reload nginx
 ```
 
+## 6、多版本切换
+
+```bash
+ln -sfn /opt/nginx/1.27.0 /opt/nginx/current
+ln -sfn /data/nginx/1.27.0 /data/nginx/current
+
+# 重启服务即可应用新版本
+sudo systemctl restart nginx
+```
+
+## 7、环境变量
+
+```bash
+echo 'export PATH=/opt/nginx/current/sbin:$PATH' >> /etc/profile.d/nginx.sh
+
+chmod +x /etc/profile.d/nginx.sh
+
+source /etc/profile.d/nginx.sh
+```
+
 # nginx
 
 ## 1、yum 安装目录
@@ -307,7 +338,7 @@ sudo systemctl reload nginx
 
 ## 2、编译安装目录
 
-假设没有指定 `--prefix`，默认路径为 `/usr/local/nginx` ，文件都在此目录，不污染系统其他位置。
+假设没有指定 `--prefix`，默认路径为 `/usr/local/nginx` 
 
 | 类型       | 路径                               | 说明                                       |
 | ---------- | ---------------------------------- | ------------------------------------------ |

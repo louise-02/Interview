@@ -273,4 +273,67 @@ docker run -d \
   --collation-server=utf8mb4_unicode_ci
 ```
 
-4.3、
+## 4.3、Nacos
+
+```bash
+# 下载 nacos-docker 项目
+git clone https://github.com/nacos-group/nacos-docker.git
+cd nacos-docker
+
+# 执行 docker-compose 命令启动Nacos 此启动方式会启动 grafana 和 prometheus
+docker-compose -f example/standalone-derby.yaml up
+
+# 编写简易版 example 中创建 docker-compose.yaml
+version: "3"
+services:
+  nacos:
+    image: nacos/nacos-server:${NACOS_VERSION} # version 也可手动指定 指的镜像版本
+    container_name: nacos-standalone
+    ports:
+      - "8848:8848"    # Nacos UI 端口
+      - "9848:9848"    # gRPC 通信端口（可选）
+      - "9849:9849"    # gRPC 通信端口（可选）
+    environment:
+      - MODE=standalone
+      - PREFER_HOST_MODE=hostname
+      - SPRING_DATASOURCE_PLATFORM=derby
+    restart: unless-stopped
+
+# 启动简易版
+docker-compose -f docker-compose.yaml up
+
+# 编写mysql版  example 中创建 docker-mysql-compose.yaml
+version: "3"
+services:
+  nacos:
+    image: nacos/nacos-server:${NACOS_VERSION} # version 也可手动指定 指的镜像版本
+    container_name: nacos-mysql
+    ports:
+      - "8848:8848"
+    environment:
+      - MODE=standalone
+      - PREFER_HOST_MODE=hostname
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=your-mysql-host
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_PORT=3306
+      - MYSQL_SERVICE_USER=nacos
+      - MYSQL_SERVICE_PASSWORD=nacos123
+    restart: unless-stopped
+
+
+# 验证Nacos服务是否启动成功
+docker logs -f $container_id
+Nacos started successfully in xxxx mode. use xxxx storage
+```
+
+> SPRING_DATASOURCE_PLATFORM：持久化方式
+>
+> - derby：使用内嵌数据库 Derby，适合开发或测试环境
+> - mysql：使用 MySQL，适合生产环境
+>
+> PREFER_HOST_MODE：用于注册服务时确定节点自身的地址
+>
+> - hostname：使用主机名注册实例（推荐 Docker/K8s 环境）
+> - ip：使用容器的 IP 地址进行注册（不推荐容器中使用）
+
