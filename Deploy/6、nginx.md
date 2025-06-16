@@ -142,74 +142,159 @@ vi /data/nginx/current/conf/nginx.conf
 # 全局配置块
 user  nginx;                      # 运行用户
 worker_processes  auto;           # 工作进程数 (auto=自动匹配CPU核心数)
-error_log  logs/error.log warn;  # 错误日志路径
-pid        /data/nginx/current/run/nginx.pid;    # 进程PID文件
+worker_rlimit_nofile 65535;       # 单个进程最大打开文件数(需要与系统 ulimit 设置匹配)
+pid run/nginx.pid;    # 进程PID文件
 
 events {
-    worker_connections  1024;     # 单个工作进程最大连接数
-    multi_accept on;              # 允许同时接受多个连接
+    # 使用 epoll 模型（Linux 下的高性能 IO 模型）
+	use epoll;
+	# 每个 worker 支持的最大连接数（总连接数 = worker_processes * worker_connections）
+    worker_connections  16384;
+    # 启用多个连接请求一并接收，提高并发能力
+    multi_accept on;
 }
 
 
 http {
+    # 加载 MIME 类型定义文件
     include       mime.types;
+    # 默认的 MIME 类型（当无法识别时）
     default_type  application/octet-stream;
-    sendfile        on;           # 启用高效文件传输模式
-    tcp_nopush     on;            # 优化数据包发送
-    tcp_nodelay    on;            # 禁用Nagle算法
-    keepalive_timeout  65;        # 长连接超时时间(秒)
-    server_tokens off;            # 隐藏Nginx版本号 (安全建议)
-    client_max_body_size 100M;    # 允许上传的最大文件大小
-
+    
+    # ===================== 临时目录配置 =====================
+    client_body_temp_path tmp/client_body;
+    proxy_temp_path       tmp/proxy;
+    fastcgi_temp_path     tmp/fastcgi;
+    scgi_temp_path        tmp/scgi;
+    uwsgi_temp_path       tmp/uwsgi;
+    
+    # ===================== 日志配置 =====================
+    # 访问日志路径与格式
+    access_log  logs/access.log main;
+    # 错误日志路径与日志级别（debug | info | notice | warn | error | crit）
+    error_log   logs/error.log error;
     # 日志格式
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
                       '$status $body_bytes_sent "$http_referer" '
                       '"$http_user_agent" "$http_x_forwarded_for"';
-
-    access_log  logs/access.log  main;  # 访问日志路径
-
-    # Gzip压缩配置
-    gzip on;
-    gzip_min_length 1k;           # 最小压缩文件大小
-    gzip_comp_level 6;            # 压缩级别(1-9)
-    gzip_types text/plain text/css application/json application/javascript text/xml;
-    gzip_vary on;                 # 根据客户端支持情况启用压缩
     
-    # 定义上游服务器 (负载均衡示例)
+    # ===================== 连接性能优化 =====================
+    # 启用 sendfile 提高文件传输效率
+    sendfile        on;
+    # 减少网络报文（延迟发送大数据块，优化文件传输）
+    tcp_nopush     on;
+    # 立即发送小数据包，适合动态请求
+    tcp_nodelay    on;
+    # 连接保持时长（秒）
+    keepalive_timeout  65;
+    # 每个连接最多处理的请求数（适用于长连接）
+    keepalive_requests 10000;
+    # 哈希表大小：用于加速查找 MIME 类型
+    types_hash_max_size 2048;
+    
+    # ===================== Gzip 压缩优化 =====================
+    gzip on;
+    # 禁用 IE6 gzip（防兼容问题）
+    gzip_disable "msie6";
+    # 添加 Vary: Accept-Encoding 响应头
+    gzip_vary on;
+    # 支持代理请求压缩
+    gzip_proxied any;
+    # 压缩级别（1-9，越高越耗 CPU）
+    gzip_comp_level 6;
+    # 压缩使用的缓冲区
+    gzip_buffers 16 8k;
+    # 最小压缩长度（小于此值的不压缩）
+    gzip_min_length 1k;
+    gzip_types text/plain text/css application/json application/javascript text/xml;
+    
+    # ===================== 缓冲配置 =====================
+    # 客户端请求体缓冲区大小
+    client_body_buffer_size 512k;
+    # 上传文件大小限制
+    client_max_body_size 50m;
+    # 客户端请求头缓冲区
+    client_header_buffer_size 64k;
+    # 支持大请求头（如大 cookie）
+    large_client_header_buffers 4 64k;
+    
+    # ===================== 超时设置 =====================
+    # 响应超时
+    send_timeout 60;
+    # 请求体读取超时
+    client_body_timeout 60;
+    # 请求头读取超时
+    client_header_timeout 60;
+    
+    
+    # 隐藏Nginx版本号 (安全建议)
+    server_tokens off;
+    
+    # ===================== 后端负载均衡配置 =====================
     upstream backend {
-        server 127.0.0.1:8282/guns/ weight=5;  # 本地应用服务1，权重5
-        server 10.108.5.203:8282/guns/;       # 其他服务器
-        keepalive 32;            # 保持的长连接数
+        # 三台后端应用服务，支持负载均衡
+        server 192.168.1.101:8080 max_fails=3 fail_timeout=30s;
+        server 192.168.1.102:8080 max_fails=3 fail_timeout=30s;
+        server 192.168.1.103:8080 max_fails=3 fail_timeout=30s;
+
+        # 启用 keepalive 长连接，减少连接频繁创建销毁
+        keepalive 64;
     }
 
+    # ===================== 主 server 配置 =====================
     server {
+        # 监听 80 端口
         listen       80;
+        # 虚拟主机名（支持多个，用空格分隔）
         server_name  localhost;
 
+        # 前端项目地址
         location / {
+            # 访问运行目录的 html 文件夹
             root   html;
+            # 默认访问 index.html 或 index.htm
             index  index.html index.htm;
             if ($request_filename ~* .*.(html|htm)$) {
                 expires    -1s;
                 add_header Cache-Control "no-cache, no-store, private, must-revalidate, proxy-revalidate";
             }
+            # 如果请求的文件不存在，使用 rewrite 把路径重写到 /index.html
             if (!-e $request_filename){
                 rewrite ^/(.*) /index.html last;
             }
         }
         
+        # 所有业务流量代理给 upstream 后端
         location /api {
             proxy_pass http://backend;
+            
+            # 透传头部信息给后端（用于识别来源）
+            # 把客户端请求的 Host 头（例如访问 example.com）原样传给后端
             proxy_set_header Host $host;
+            # 将客户端的真实 IP 写入 X-Real-IP 头
             proxy_set_header  X-Real-IP        $remote_addr;
+            # 给 X-Forwarded-For 头加上客户端 IP
             proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;
-            proxy_set_header X-NginX-Proxy true;
-        }
-
-
-        error_page   500 502 503 504  /50x.html;
-        location = /50x.html {
-            root   html;
+            # 传递一个标识头给后端，说明这是经过 Nginx 转发的请求,不是标准头，一般后端可据此做自定义逻辑
+            proxy_set_header  X-NginX-Proxy true;
+            
+            # 连接超时设置
+            # 与后端服务器建立连接的最大等待时间，超时直接失败
+            proxy_connect_timeout 10s;
+            # 向后端发送请求时的超时时间
+            proxy_send_timeout 60s;
+            # 等待后端响应内容的超时时间
+            proxy_read_timeout 60s;
+            
+            # 启用缓冲，提升高并发性能
+            # 开启缓冲：Nginx 把后端响应先存入缓冲区，再发送给客户端,避免后端慢速输出卡住连接
+            proxy_buffering on;
+            # 设置 16 个 64KB 的缓冲区，用于存放后端的响应内容
+            proxy_buffers 16 64k;
+            # 响应内容达到多少（128k）会立即开始写入客户端，不等待所有缓冲满
+            proxy_busy_buffers_size 128k;
+            # 当缓冲区满了，会将响应内容写入临时文件
+            proxy_temp_file_write_size 128k;
         }
 		
 		# 禁止访问隐藏文件
@@ -229,13 +314,26 @@ http {
 /opt/nginx/current/sbin/nginx -t -p /data/nginx/current/ -c conf/nginx.conf
 ```
 
-## 4、启停 Nginx
+## 4、用户和目录
+
+```bash
+# 创建 nginx 用户和组（无登录权限）
+sudo useradd -r -s /sbin/nologin nginx
+
+# 授权数据目录
+chown -R nginx:nginx /opt/nginx/
+chown -R nginx:nginx /data/nginx/
+```
+
+## 5、启停 Nginx
 
 启动
 
 ```bash
 /opt/nginx/current/sbin/nginx -p /data/nginx/current/ -c conf/nginx.conf
 ```
+
+> -p：指定 nginx 工作前缀目录
 
 重新载入配置文件
 
@@ -255,7 +353,7 @@ http {
 /opt/nginx/current/sbin/nginx -s quit -p /data/nginx/current/ -c conf/nginx.conf
 ```
 
-## 5、注册服务
+## 6、注册服务
 
 修改配置
 
@@ -272,10 +370,14 @@ After=network.target
 
 [Service]
 Type=forking
-ExecStart=/opt/nginx/current/sbin/nginx -p /data/nginx/current/ -c conf/nginx.conf
-ExecReload=/opt/nginx/current/sbin/nginx -s reload -p /data/nginx/current/ -c conf/nginx.conf
-ExecStop=/opt/nginx/current/sbin/nginx -s quit -p /data/nginx/current/ -c conf/nginx.conf
+ExecStart=/opt/nginx/current/sbin/nginx -p /data/nginx/current/ -c /data/nginx/current/conf/nginx.conf
+ExecReload=/opt/nginx/current/sbin/nginx -s reload -p /data/nginx/current/ -c /data/nginx/current/conf/nginx.conf
+ExecStop=/opt/nginx/current/sbin/nginx -s quit -p /data/nginx/current/ -c /data/nginx/current/conf/nginx.conf
 PIDFile=/data/nginx/current/run/nginx.pid
+LimitNOFILE=65536
+TimeoutStartSec=30
+TimeoutStopSec=30
+Restart=on-failure
 PrivateTmp=true
 
 [Install]
@@ -302,7 +404,7 @@ systemctl status nginx
 sudo systemctl reload nginx
 ```
 
-## 6、多版本切换
+## 7、多版本切换
 
 ```bash
 ln -sfn /opt/nginx/1.27.0 /opt/nginx/current
@@ -312,7 +414,7 @@ ln -sfn /data/nginx/1.27.0 /data/nginx/current
 sudo systemctl restart nginx
 ```
 
-## 7、环境变量
+## 8、环境变量
 
 ```bash
 echo 'export PATH=/opt/nginx/current/sbin:$PATH' >> /etc/profile.d/nginx.sh

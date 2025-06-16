@@ -49,6 +49,16 @@ oracle-java*
 
 # 二进制包安装
 
+## 0、jdk 下载
+
+open jdk 下载地址
+
+https://adoptium.net/zh-CN/download/
+
+oracle jdk 下载地址
+
+https://www.oracle.com/cn/java/technologies/downloads/
+
 ## 1、安装
 
 上传 tar 包，以 `jdk-8u391-linux-x64.tar.gz` 为例

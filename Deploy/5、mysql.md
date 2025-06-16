@@ -88,6 +88,28 @@ vi /etc/yum.conf
 exclude=mysql*
 ```
 
+## 2、卸载
+
+```bash
+# 停止服务
+sudo systemctl stop mysqld
+
+# 卸载所有 MySQL 相关的 RPM 包
+sudo yum remove -y mysql mysql-server mysql-libs mysql-common mysql-community-*
+
+# 删除残留配置和数据文件
+sudo rm -rf /var/lib/mysql
+sudo rm -rf /etc/my.cnf
+sudo rm -rf /etc/my.cnf.d
+sudo rm -rf /var/log/mysqld.log
+sudo rm -rf /usr/lib64/mysql
+sudo rm -rf /usr/share/mysql
+
+# 清理用户和组
+sudo userdel -r mysql
+sudo groupdel mysql
+```
+
 # mysql
 
 ## 1、数据库初始化
@@ -106,6 +128,11 @@ use mysql;
 
 update user set host='%' where user='root';
 
+FLUSH PRIVILEGES;
+
+# 创建普通用户
+CREATE USER 'cermp'@'%' IDENTIFIED BY 'P5x@jN2qZ4wS6';
+GRANT ALL PRIVILEGES ON *.* TO 'cermp'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 ```
 
@@ -156,7 +183,7 @@ sudo systemctl restart mysqld
 3、创建复制用户
 
 ```sql
-CREATE USER 'replica_user'@'%' IDENTIFIED BY 'Aa123456..!';
+CREATE USER 'replica_user'@'%' IDENTIFIED WITH mysql_native_password BY 'Aa123456..!';
 GRANT REPLICATION SLAVE ON *.* TO 'replica_user'@'%';
 FLUSH PRIVILEGES;
 ```

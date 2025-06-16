@@ -63,6 +63,14 @@ sudo firewall-cmd --permanent --add-port=9009/tcp  # 跨服务器复制端口
 sudo firewall-cmd --reload
 ```
 
+5、测试连接
+
+```bash
+clickhouse-client -h 127.0.0.1 --port 9000 -u default --password
+
+SELECT 1;
+```
+
 ## 2、卸载
 
 关闭服务
@@ -84,8 +92,6 @@ sudo yum remove clickhouse-server clickhouse-client
 sudo rm -rf /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /etc/clickhouse-client
 ```
 
-
-
 # clickhouse
 
 ## 1、yum 安装目录
@@ -103,6 +109,61 @@ sudo rm -rf /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-serve
 | 📁 临时目录         | `/var/lib/clickhouse/tmp/`                         | ClickHouse 执行中用到的临时目录                              |
 | 📁 **表结构元数据** | `/var/lib/clickhouse/metadata/`                    | 存放数据库和表的结构定义                                     |
 | 📁 动态库目录       | `/usr/lib/clickhouse/` 或 `/usr/lib64/clickhouse/` | ClickHouse 依赖的共享库（按系统架构不同路径可能略有差异）    |
+
+## 2、配置文件
+
+用户名和密码设置
+
+```bash
+vi /etc/clickhouse-server/users.xml
+
+# 设置默认用户名的密码
+<users>
+    <default>
+        <password>yourpassword</password>
+        ...
+    </default>
+</users>
+
+# 例如设置为 Qx93@dV!zLp6#nRg
+echo -n 'Qx93@dV!zLp6#nRg' | sha256sum
+# 生成 983ade067c8a796f4d1f12e9d2a19a45a7acd35654afffe52f953101c1355ec0  -
+<users>
+    <default>
+        <password_sha256_hex>983ade067c8a796f4d1f12e9d2a19a45a7acd35654afffe52f953101c1355ec0</password_sha256_hex>
+        <networks>
+            <ip>::/0</ip>  <!-- 根据需要限制为某些网段 -->
+        </networks>
+        <profile>default</profile>
+        <quota>default</quota>
+    </default>
+</users>
+```
+
+数据文件存储路径设置
+
+```bash
+vi /etc/clickhouse-server/config.xml
+
+# 主数据存储路径
+<path>/var/lib/clickhouse/</path>
+# 临时文件路径
+<tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+# 用户文件目录
+<user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+# 格式定义目录
+<format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
+
+# 可更改为以下目录
+<path>/data/clickhouse/data/</path>
+<tmp_path>/data/clickhouse/tmp/</tmp_path>
+
+# 授权
+sudo mkdir -p /data/clickhouse/data
+sudo mkdir -p /data/clickhouse/tmp
+sudo chown -R clickhouse:clickhouse /data/clickhouse
+sudo chmod -R 755 /data/clickhouse
+```
 
 ## 3、新建用户授权
 
