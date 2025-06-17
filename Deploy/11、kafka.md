@@ -118,3 +118,30 @@ sudo systemctl start kafka
 sudo systemctl status kafka
 ```
 
+
+
+# Kafka
+
+## 1、日志地址修改
+
+```bash
+vi /opt/kafka/bin/kafka-run-class.sh
+
+# 修改此处
+if [ "x$LOG_DIR" = "x" ]; then
+  LOG_DIR="$base_dir/logs"
+fi
+# 修改为以下内容
+LOG_DIR="/data/kafka/logs"
+```
+
+## 2、堆内存修改
+
+```bash
+vi /opt/kafka/bin/kafka-server-start.sh
+
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+    export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G"
+fi
+```
+

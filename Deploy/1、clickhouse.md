@@ -46,6 +46,7 @@ sudo vim /etc/clickhouse-server/config.xml
 
 ```xml
 <listen_host>0.0.0.0</listen_host>
+<interserver_http_host>节点真实IP</interserver_http_host>
 ```
 
 重启服务生效：
@@ -179,5 +180,111 @@ IDENTIFIED WITH plaintext_password BY 'my_password';
 GRANT ALL ON my_database.* TO my_user;
 ```
 
+## 4、复制表配置
 
+zookeeper 配置
+
+```
+vim /etc/clickhouse-server/config.xml
+ 
+   <zookeeper>
+        <node>
+            <host>10.168.106.107</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>10.168.106.108</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>10.168.106.109</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+```
+
+所有节点创建集群配置文件
+
+```xml
+vi /etc/clickhouse-server/config.d/clusters.xml
+
+<yandex>
+    <remote_servers>
+        <!-- 定义集群名称（如 full_replica_cluster） -->
+        <full_replica_cluster>
+            <shard>  <!-- 只有一个分片 -->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>节点1的IP</host>  <!-- 替换为实际IP或主机名 -->
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>节点2的IP</host>  <!-- 替换为实际IP或主机名 -->
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </full_replica_cluster>
+    </remote_servers>
+</yandex>
+```
+
+两个节点分别创建宏配置文件
+
+```
+vi /etc/clickhouse-server/config.d/macros.xml
+
+<yandex>
+    <macros>
+        <shard>01</shard>          <!-- 所有节点相同分片ID -->
+        <replica>node1</replica>   <!-- 节点唯一标识 -->
+    </macros>
+</yandex>
+
+<yandex>
+    <macros>
+        <shard>01</shard>          <!-- 分片ID与节点1相同 -->
+        <replica>node2</replica>   <!-- 不同副本标识 -->
+    </macros>
+</yandex>
+```
+
+设置文件权限
+
+```
+sudo chown clickhouse:clickhouse /etc/clickhouse-server/config.d/*.xml
+sudo chmod 644 /etc/clickhouse-server/config.d/*.xml
+```
+
+重启 clickhouse
+
+```
+sudo systemctl restart clickhouse-server
+# 检查状态
+sudo systemctl status clickhouse-server
+```
+
+查看是否生效
+
+```
+-- 检查集群配置
+SELECT cluster, shard_num, host_name, replica_num FROM system.clusters;
+
+-- 检查宏变量
+SELECT * FROM system.macros;
+
+-- 测试创建复制表（在任一节点执行）
+CREATE TABLE default.replica_test ON CLUSTER full_replica_cluster (id Int32)
+ENGINE = ReplicatedMergeTree ORDER BY id;
+
+-- 检查复制队列状态
+SELECT 
+    type,
+    create_time,
+    is_blocked,
+    error
+FROM system.replication_queue
+WHERE table = 'replica_test'
+ORDER BY create_time DESC
+LIMIT 5;
+```
 
