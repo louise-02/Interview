@@ -147,8 +147,8 @@ pid run/nginx.pid;    # 进程PID文件
 
 events {
     # 使用 epoll 模型（Linux 下的高性能 IO 模型）
-	use epoll;
-	# 每个 worker 支持的最大连接数（总连接数 = worker_processes * worker_connections）
+	  use epoll;
+	  # 每个 worker 支持的最大连接数（总连接数 = worker_processes * worker_connections）
     worker_connections  16384;
     # 启用多个连接请求一并接收，提高并发能力
     multi_accept on;
@@ -169,14 +169,15 @@ http {
     uwsgi_temp_path       tmp/uwsgi;
     
     # ===================== 日志配置 =====================
-    # 访问日志路径与格式
-    access_log  logs/access.log main;
-    # 错误日志路径与日志级别（debug | info | notice | warn | error | crit）
-    error_log   logs/error.log error;
     # 日志格式
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
                       '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for"';
+                      '"$http_user_agent" "$http_x_forwarded_for"'
+                      'upstream:$upstream_addr';
+    # 访问日志路径与格式
+    access_log  logs/access.log main;
+    # 错误日志路径与日志级别（debug | info | notice | warn | error | crit）
+    error_log   logs/error.log warn;
     
     # ===================== 连接性能优化 =====================
     # 启用 sendfile 提高文件传输效率
@@ -280,11 +281,13 @@ http {
             
             # 连接超时设置
             # 与后端服务器建立连接的最大等待时间，超时直接失败
-            proxy_connect_timeout 10s;
+            proxy_connect_timeout 60s;
             # 向后端发送请求时的超时时间
             proxy_send_timeout 60s;
             # 等待后端响应内容的超时时间
             proxy_read_timeout 60s;
+            # Nginx 向客户端发送响应数据时，每次发送的超时时间
+            send_timeout 60s;
             
             # 启用缓冲，提升高并发性能
             # 开启缓冲：Nginx 把后端响应先存入缓冲区，再发送给客户端,避免后端慢速输出卡住连接

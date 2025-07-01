@@ -128,6 +128,11 @@ use mysql;
 
 update user set host='%' where user='root';
 
+# 授权 root 拥有所有数据库的所有权限
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+
+GRANT SYSTEM_USER ON *.* TO 'root'@'%';
+
 FLUSH PRIVILEGES;
 
 # 创建普通用户
@@ -148,6 +153,129 @@ FLUSH PRIVILEGES;
 | 📁 客户端工具                 | `/usr/bin/mysql`、`/usr/bin/mysqladmin` 等 | MySQL 客户端及管理工具                     |
 | 📁 库文件                     | `/usr/lib64/mysql/`                        | MySQL 相关动态库                           |
 | 📁 通用文件                   | `/usr/share/mysql/`                        | 包括错误信息、字符集、SQL 脚本等           |
+
+## 3、配置文件
+
+以下为一台16G内存配置
+
+```bash
+chown -R mysql:mysql /data/mysql
+chmod 750 /data/mysql
+vi /etc/my.cnf
+
+[mysqld]
+# ======================================
+# 基础配置
+# ======================================
+user = mysql
+port = 3306
+basedir = /usr/local/mysql
+datadir = /data/mysql
+socket = /data/mysql/mysql.sock
+pid-file = /var/run/mysqld/mysqld.pid
+default-storage-engine = InnoDB
+
+# ======================================
+# 编码与时区
+# ======================================
+character-set-server = utf8mb4
+collation-server = utf8mb4_general_ci
+init_connect='SET NAMES utf8mb4'
+default-time-zone = '+08:00'
+
+# ======================================
+# 连接相关
+# ======================================
+# 最大连接数
+max_connections = 500
+# 出错后允许最大重试连接数
+max_connect_errors = 10000
+# 非交互式连接空闲超时 应用程序连接
+wait_timeout = 1800
+# 交互式连接空闲超时 mysql命令行
+interactive_timeout = 1800
+
+# ======================================
+# SQL 模式控制
+# ======================================
+# STRICT_TRANS_TABLES 开启严格数据校验，拒绝非法数据插入，防止插入超长字符串、非法日期等
+# NO_ENGINE_SUBSTITUTION 禁止存储引擎替换，确保存储引擎按预期使用，避免自动降级
+sql_mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+
+# ======================================
+# 慢查询日志（用于定位性能瓶颈）
+# ======================================
+# 错误日志
+log-error = /var/log/mysql/error.log
+# 是否开启慢查询日志 1 表示开启，0 表示关闭
+slow_query_log = 1
+# 慢查询日志
+slow_query_log_file = /var/log/mysql/slow.log
+# 超过2秒即为慢查询
+long_query_time = 2
+# 没用索引的SQL也记录
+log_queries_not_using_indexes = 1
+
+# ======================================
+# 二进制日志（备份、主从、审计）
+# ======================================
+# 主从唯一标识（必须配置）
+server-id = 1
+# bin log日志
+log-bin = /var/log/mysql/mysql-bin
+# 行格式（推荐）
+binlog_format = row
+# 日志保留天数
+expire_logs_days = 7
+# 每次事务同步（主从一致性高）
+sync-binlog = 1
+
+# ======================================
+# 表结构
+# ======================================
+# 0 大小写敏感 Linux/Unix 默认
+# 1 不区分大小写（存储小写） Windows/macOS 常用
+# 2 不区分大小写（保留原样） macOS（老版本）
+lower_case_table_names = 1
+
+# ======================================
+# 内存相关配置（重点优化）
+# ======================================
+# InnoDB Buffer Pool：用于缓存表数据和索引（最重要参数）
+innodb_buffer_pool_size = 10G # 建议为系统内存的 60~70%（16GB × 65% ≈ 10GB）
+# InnoDB Log：事务日志文件大小（单文件）
+innodb_log_file_size = 1G # 写入量大时建议不小于 512MB~1GB，建议占用内存 12% 左右
+innodb_log_files_in_group = 2 # 日志文件数量（共用2GB日志空间）
+# Log Buffer：事务日志写入缓冲区
+innodb_log_buffer_size = 64M # 建议占用内存 0.5% 左右
+# 控制写入性能与可靠性
+innodb_flush_log_at_trx_commit = 1 # 每次提交刷盘（事务安全）建议保留 1
+innodb_flush_method = O_DIRECT # 减少 double buffering 提升性能
+# 每张表独立存储（推荐）
+innodb_file_per_table = 1
+
+
+# ======================================
+# 临时表/排序/连接缓存
+# ======================================
+# 内存临时表最大值（提高避免磁盘临时表） tmp_table_size + max_heap_table_size 建议占用内存 2% 左右
+tmp_table_size = 128M
+# 内存表最大值（与 tmp_table_size 保持一致）
+max_heap_table_size = 128M
+# 每连接排序缓冲区（占用内存 = sort_buffer × 并发）
+sort_buffer_size = 8M
+# 每连接 join 缓冲区（同上）
+join_buffer_size = 8M
+
+# ======================================
+# 性能统计（建议开启）
+# ======================================
+# 性能监控支持
+performance_schema = ON
+
+[client]
+socket=/data/mysql/mysql.sock
+```
 
 # 主从复制
 

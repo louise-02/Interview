@@ -115,8 +115,7 @@ source /etc/profile.d/zookeeper.sh
 ## 5、创建服务
 
 ```bash
-vi /etc/systemd/system/zookeeper.service
-
+sudo tee /etc/systemd/system/zookeeper.service > /dev/null <<EOF
 [Unit]
 Description=Apache ZooKeeper Server
 After=network.target
@@ -138,6 +137,7 @@ TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
+EOF
 ```
 
 ## 6、同步集群文件
@@ -167,6 +167,12 @@ sudo systemctl stop zookeeper
 sudo systemctl status zookeeper
 ```
 
+非服务启动
+
+```bash
+
+```
+
 ## 8、测试功能
 
 ```bash
@@ -182,3 +188,36 @@ set /test_node "world"
 get /test_node
 delete /test_node
 ```
+
+# Zookeeper 配置
+
+## 1、配置文件
+
+```bash
+/opt/zookeeper/conf/zoo.cfg
+
+# 数据地址
+dataDir=/data/zookeeper/data
+# 日志文件路径
+zookeeper.log.dir=/data/zookeeper/logs
+# 限制每个客户端主机最多可以建立的 ZooKeeper 连接数 默认60
+maxClientCnxns=100
+# ZooKeeper 内部的时间单位，单位是毫秒
+tickTime=2000
+# follower 连接 leader 时，最多允许多少个 tickTime 的时间来完成初始化（如数据同步）
+initLimit=10
+# 运行时 leader 和 follower 之间最多允许多少个 tickTime 的时间未同步数据
+syncLimit=5
+# 集群配置
+server.1=hadoop001:2888:3888
+server.2=hadoop002:2888:3888
+server.3=hadoop003:2888:3888
+
+
+# 每小时自动清理一次旧的日志/快照文件
+autopurge.purgeInterval=1
+# 保留最近 3 个 snapshot 文件（对应部分 log 文件也会保留）
+autopurge.snapRetainCount=3
+```
+
+## 2、堆内存修改
