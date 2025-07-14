@@ -285,7 +285,6 @@ kafka-console-consumer.sh
 ```bash
 # 消费 first 主题中的数据
 kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic first
-
 # 把主题中所有的数据都读取出来，包括历史数据
 kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --from-beginning --topic first
 ```
