@@ -1,85 +1,44 @@
-# yum 安装（未验证成功）
-
-## 1、安装
-
-**1、安装必要依赖（Oracle 官方推荐）**
-
-安装这个包会自动配置系统内核参数、用户、组等。
-
-```bash
-# 配置官方源
-sudo wget https://yum.oracle.com/repo/OracleLinux/OL7/latest/x86_64/getPackage/oraclelinux-release-el7-1.0-10.el7.x86_64.rpm
-sudo rpm -ivh oraclelinux-release-el7-1.0-10.el7.x86_64.rpm
-
-# Oracle GPG 密钥配置
-sudo wget https://yum.oracle.com/RPM-GPG-KEY-oracle-ol7 -O /etc/pki/rpm-gpg/RPM-GPG-KEY-oracle
-sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-oracle
-
-# 清理 yum 缓存
-sudo yum clean all
-
-# 下载19c配置
-sudo yum install -y oracle-database-preinstall-19c
-```
-
-**2、安装 Oracle 数据库 RPM 包**
-
-注册并登录 Oracle 官方网站（需Oracle账号），下载 Oracle Database 19c for Linux x86-64 RRM 包。
-
-https://www.oracle.com/database/technologies/oracle19c-linux-downloads.html
-
-```bash
-sudo yum -y localinstall oracle-database-ee-19c-1.0-1.x86_64.rpm
-```
-
-**3、配置数据库实例（初始化）**
-
-RPM 安装不会自动创建数据库，需要运行初始化脚本
-
-```bash
-sudo /etc/init.d/oracledb_ORCLCDB-19c configure
-```
-
-> 该命令会自动：
->
-> - 创建 ORCLCDB 数据库（CDB）
->
-> - 设置字符集为 AL32UTF8
->
-> - 设置默认密码（在 `/etc/sysconfig/oracledb_ORCLCDB-19c.conf` 中定义）
->
-> - 启动监听器和数据库
-
-**4、启停数据库**
-
-```bash
-# 启动
-sudo systemctl start oracle-database
-
-# 停止
-sudo systemctl stop oracle-database
-```
-
-**5、监听器启停**
-
-yum 安装不会配置 listener 的 systemctl
-
-```bash
-# 启动监听器
-lsnrctl start
-
-# 停止监听器
-lsnrctl stop
-
-# 重载监听器
-lsnrctl reload
-```
-
-## 2、卸载
-
-
-
 # 二进制包安装
+
+## 0、磁盘查看
+
+查看磁盘信息
+
+```bash
+fdisk -l
+
+磁盘 /dev/sda：107.4 GB, 107374182400 字节，209715200 个扇区
+Units = 扇区 of 1 * 512 = 512 bytes
+扇区大小(逻辑/物理)：512 字节 / 512 字节
+I/O 大小(最小/最佳)：512 字节 / 512 字节
+磁盘标签类型：dos
+磁盘标识符：0x000148e1
+
+   设备 Boot      Start         End      Blocks   Id  System
+/dev/sda1   *        2048   209715166   104856559+  83  Linux
+
+磁盘 /dev/sdb：429.5 GB, 429496729600 字节，838860800 个扇区
+Units = 扇区 of 1 * 512 = 512 bytes
+扇区大小(逻辑/物理)：512 字节 / 512 字节
+I/O 大小(最小/最佳)：512 字节 / 512 字节
+```
+
+若此时发现 /dev/sdb 不在 df -h 中，则需要对硬盘进行格式化
+
+```
+# 格式化磁盘为xfs（推荐）
+mkfs.xfs /dev/sdb
+
+# 检查文件系统
+blkid /dev/sdb
+```
+
+挂载磁盘
+
+```
+mkdir -p /u02
+mount /dev/sdb /u02
+```
 
 ## 1、安装
 
@@ -130,10 +89,16 @@ passwd oracle
 编辑 `/etc/sysctl.conf`，追加：
 
 ```bash
+# 最大文件句柄数（保持默认或稍低）
 fs.file-max = 6815744
+# Semaphore（信号量）
 kernel.sem = 250 32000 100 128
-kernel.shmmax = 8589934592       # 根据内存大小调整，比如 8 GB
-kernel.shmall = 2097152
+
+# 共享内存（关键调整！）
+kernel.shmmax = 8589934592       # 8G（不超过物理内存的 50%）4294967296
+kernel.shmall = 2097152          # kernel.shmall/4096（page size） 
+
+# 网络缓冲区
 net.core.rmem_default = 262144
 net.core.rmem_max = 4194304
 net.core.wmem_default = 262144
@@ -233,6 +198,8 @@ DECLINE_SECURITY_UPDATES=true
 ```
 
 > ORACLE_HOSTNAME 要写主机名，可用 hostname 命令查看
+>
+> 修改主机名：sudo hostnamectl set-hostname 新主机名
 
 执行静默安装
 
@@ -301,6 +268,8 @@ dbca -silent \
 > `sysPassword`：sys 用户的密码
 >
 > `systemPassword`：system 用户的密码
+>
+> `totalMemory`：24576 总内存24G
 
 验证监听器是否注册数据库服务
 
@@ -575,18 +544,48 @@ sudo sysctl -p
 
 # oracle
 
-## 1、yum 安装目录
+## 1、二进制包 安装目录
 
-| 类型               | 路径                                             | 说明                                        |
-| ------------------ | ------------------------------------------------ | ------------------------------------------- |
-| 📁 软件安装目录     | `/opt/oracle/product/19c/dbhome_1`               | Oracle 主目录                               |
-| 📁 数据文件路径     | `/opt/oracle/oradata/ORCLCDB`                    | 数据库文件                                  |
-| 📄 数据库配置文件   | `/etc/sysconfig/oracledb_ORCLCDB-19c.conf`       | 初始化配置，包含密码、字符集等              |
-| 📄 启动脚本         | `/etc/init.d/oracledb_ORCLCDB-19c`               | 用于手动启动/停止数据库的脚本               |
-| 📄 oratab 文件      | `/etc/oratab`                                    | 控制实例是否随系统启动                      |
-| 📁 监听配置         | `/opt/oracle/product/19c/dbhome_1/network/admin` | listener.ora、tnsnames.ora 所在目录         |
-| 📁 日志目录         | `/opt/oracle/diag/`                              | 各类日志文件，包括监听器和数据库告警日志    |
-| 🧪 环境变量建议文件 | `/home/oracle/.bash_profile`                     | 设置 `$ORACLE_HOME`、`$ORACLE_SID`、`$PATH` |
+| 类型                   | 路径                                                     | 说明                                           | 来源                        |
+| ---------------------- | -------------------------------------------------------- | ---------------------------------------------- | --------------------------- |
+| 📁 **基础目录**         | `/u01/app/oracle`                                        | Oracle 基础目录，包含各种子目录                | `ORACLE_BASE` 参数          |
+| 📁 **软件安装目录**     | `/u01/app/oracle/product/19.0.0/dbhome_1`                | Oracle 软件主目录，包含所有二进制文件和工具    | `ORACLE_HOME`` 参数         |
+| 📁 **清单位录**         | `/u01/app/oraInventory`                                  | Oracle 产品清单，记录所有安装的 Oracle 产品    | `INVENTORY_LOCATION` 参数   |
+| 📁 **数据文件目录**     | `/u02/oradata`                                           | 数据库数据文件、控制文件、重做日志文件存储位置 | `-datafileDestination` 参数 |
+| 📁 **数据库文件目录**   | `/u02/oradata/ORCLCDB/`                                  | 具体数据库文件，如 system01.dbf                | DBCA 自动创建               |
+| 📁 **网络配置目录**     | `/u01/app/oracle/product/19.0.0/dbhome_1/network/admin/` | 网络配置文件，如 listener.ora                  | `ORACLE_HOME` 下的固定路径  |
+| 📁 **诊断日志目录**     | `/u01/app/oracle/diag/`                                  | ADR 诊断日志目录，包含跟踪文件、告警日志等     | 自动创建                    |
+| 🧪 **环境变量建议文件** | `/home/oracle/.bash_profile`                             | 设置 `$ORACLE_HOME`、`$ORACLE_SID`、`$PATH`    |                             |
+
+## 2、创建表空间
+
+创建 VMLP 表空间
+
+```
+CREATE TABLESPACE VLMP
+DATAFILE '/u02/oradata/ORCLCDB/vlmp01.dbf' SIZE 20G
+AUTOEXTEND ON NEXT 1G MAXSIZE 200G
+EXTENT MANAGEMENT LOCAL
+SEGMENT SPACE MANAGEMENT AUTO
+LOGGING
+ONLINE;
+```
+
+> 文件存储在 /u02/oradata/ORCLCDB/vlmp01.dbf 初始化 20G
+>
+> 每次增加 1G 最大 200G
+
+```
+CREATE TABLESPACE VLMP
+DATAFILE '/u02/oradata/ORCLCDB/vlmp01.dbf' SIZE 20G
+AUTOEXTEND ON NEXT 1G MAXSIZE UNLIMITED
+EXTENT MANAGEMENT LOCAL
+SEGMENT SPACE MANAGEMENT AUTO
+LOGGING
+ONLINE;
+```
+
+> 每次增加 1G 最大无限制
 
 ## 3、创建授权用户
 
@@ -595,13 +594,13 @@ sudo sysctl -p
 创建用户
 
 ```sql
-CREATE USER VLMP_USER IDENTIFIED BY password;
+CREATE USER VLMP IDENTIFIED BY VLMP_Aa123456;
 ```
 
 分配表空间
 
 ```bash
-ALTER USER VLMP_USER DEFAULT TABLESPACE VLMP;
+ALTER USER VLMP DEFAULT TABLESPACE VLMP;
 ```
 
 授权
@@ -616,13 +615,16 @@ GRANT
   CREATE TRIGGER,         -- 创建触发器
   CREATE TYPE,            -- 创建用户定义类型
   CREATE SYNONYM          -- 创建同义词
-TO VLMP_USER;
+TO VLMP;
+
+# 授权所有权限
+GRANT ALL PRIVILEGES TO VLMP;
 ```
 
 授权对此表空间的所有权限
 
 ```sql
-ALTER USER VLMP_USER QUOTA UNLIMITED ON VLMP; -- 用户在表空间 VLMP 上没有存储限制
+ALTER USER VLMP QUOTA UNLIMITED ON VLMP; -- 用户在表空间 VLMP 上没有存储限制
 ```
 
 > **QUOTA**：表示用户在特定表空间上可以使用多少存储空间。

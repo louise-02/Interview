@@ -1,4 +1,8 @@
-# 常用快捷键
+# 0、下载
+
+https://www.jetbrains.com/zh-cn/idea/download/other.html
+
+# 1、常用快捷键
 
 | 快捷键             | 说明                          |
 | :----------------- | :---------------------------- |
@@ -17,14 +21,16 @@
 | ctrl + alt + m     | 抽取方法                      |
 | ctrl + alt + l     | 格式化代码                    |
 | ctrl + alt + t     | 提取代码到 if/try/runnable 等 |
+| ctrl + alt + h     | 查看方法调用与被调用关系      |
 | ctrl + shift + u   | 转换大小写                    |
 | shift + shift      | 全局搜索框                    |
 | shift + f6         | 选中所有变量并修改            |
+| shift + ctrl + /   | XML文件生成注释               |
 | alt + insert       | get/set 方法和构造方法        |
 | alt + 鼠标往下多行 | 多行同时修改                  |
 | 代码.var           | 补充变量声明                  |
 
-# 文件模板
+# 2、文件模板
 
 File - Settings - Editor - File and Code Templates
 
@@ -126,7 +132,7 @@ public enum ${NAME} {
 #end
 ```
 
-# 代码模板
+# 3、代码模板
 
 File - Settings - Editor - Live Templates
 
@@ -161,9 +167,11 @@ new Thread(() -> {
 
 3、左下角选择适用文件类型
 
-# 正则表达式替换
+# 4、正则表达式替换
 
 ctrl + r 使用正则表达式替换
+
+使用()进行捕获，$1获取捕获的值
 
 **特殊规则**
 
@@ -185,7 +193,7 @@ ctrl + r 使用正则表达式替换
 (.*[\u4e00-\u9fa5]+.*)
 ```
 
-# 激活 Idea
+# 5、激活 Idea
 
 File - Settings - Plugins
 
@@ -195,7 +203,7 @@ File - Settings - Plugins
 
 3、在 Help 菜单中点击 Eval Reset 进行重置
 
-# 注释中引用类方法
+# 6、注释中引用类方法
 
 注释中标注类或者方法，更容易理解代码
 
@@ -205,26 +213,18 @@ File - Settings - Plugins
  */
 ```
 
-# 常用插件
+# 7、常用插件
 
-.ignore
-
-Easy Javadoc：生成注释
-
-IDE Eval Reset：idea 破解
-
-Maven Helper
-
-MybatisX
-
-Translation
-
-Easy Code：代码生成
-
-RestfulTool：使用 ctrl + alt + / 快速定位接口
-
-Activiti Bpmn visualizer
-
-jbl javatoweb
-
-jclasslib Bytecode Viewer
+| 插件名                    | 用途                             |
+| ------------------------- | -------------------------------- |
+| .ignore                   | 生成 .ignore 文件                |
+| Easy Javadoc              | 生成注释                         |
+| IDE Eval Reset            | idea 破解                        |
+| Maven Helper              |                                  |
+| MybatisX                  | xml识别，代码生成                |
+| Translation               | 翻译                             |
+| Easy Code                 | 代码生成                         |
+| RestfulTool               | 使用 ctrl + alt + / 快速定位接口 |
+| Activiti Bpmn visualizer  | 工作流                           |
+| jbl javatoweb             |                                  |
+| jclasslib Bytecode Viewer |                                  |

@@ -288,3 +288,27 @@ ORDER BY create_time DESC
 LIMIT 5;
 ```
 
+## 5、日志文件删除
+
+```sql
+-- 查看分区情况
+SELECT
+    database,
+    table,
+    partition,
+    min(min_time) AS start,
+    max(max_time) AS end
+FROM system.parts
+WHERE table IN ('text_log', 'part_log')
+  AND active
+GROUP BY database, table, partition
+ORDER BY start;
+
+-- 删除历史分区（例如删除 2025-07 月份的日志）
+ALTER TABLE system.text_log DROP PARTITION '202507';
+ALTER TABLE system.part_log DROP PARTITION '202508';
+-- 如果文件过大 需要跳过校验
+ALTER TABLE system.text_log DROP PARTITION '202508' SETTINGS max_partition_size_to_drop = 0;
+ALTER TABLE system.part_log DROP PARTITION '202508' SETTINGS max_partition_size_to_drop = 0;
+```
+

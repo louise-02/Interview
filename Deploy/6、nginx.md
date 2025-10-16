@@ -123,6 +123,7 @@ ln -sfn /data/nginx/1.26.2 /data/nginx/current
 # 拷贝默认配置文件
 mv /opt/nginx/1.26.2/conf /data/nginx/1.26.2/
 mv /opt/nginx/1.26.2/html /data/nginx/1.26.2/
+mv /opt/nginx/1.26.2/logs /data/nginx/1.26.2/
 
 # 查看版本
 /opt/nginx/current/sbin/nginx -v

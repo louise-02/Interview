@@ -167,12 +167,6 @@ sudo systemctl stop zookeeper
 sudo systemctl status zookeeper
 ```
 
-非服务启动
-
-```bash
-
-```
-
 ## 8、测试功能
 
 ```bash
