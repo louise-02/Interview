@@ -540,7 +540,60 @@ kernel.shmall = 4194304
 sudo sysctl -p
 ```
 
+## 4、Swap
 
+查看当前是否存在 swap
+
+```bash
+# 查看 swap 使用情况
+swapon --show
+# 或
+free -h
+
+如果输出为空，说明 当前没有 swap。
+```
+
+创建 swap 文件
+
+```bash
+# 1. 创建一个16GB的swap文件
+sudo fallocate -l 16G /swapfile
+
+# 如果 fallocate 不可用，可用 dd（速度慢但通用）
+# sudo dd if=/dev/zero of=/swapfile bs=1G count=16 status=progress
+
+# 2. 设置权限
+sudo chmod 600 /swapfile
+
+# 3. 格式化为 swap
+sudo mkswap /swapfile
+
+# 4. 启用 swap
+sudo swapon /swapfile
+
+# 5. 验证是否启用成功
+swapon --show
+free -h
+```
+
+设置开机自动挂载
+
+```bash
+否则重启后 swap 会失效。
+
+sudo vim /etc/fstab
+
+在文件末尾加上
+/swapfile none swap sw 0 0
+```
+
+删除 swap
+
+```bash
+sudo swapoff /swapfile
+sudo rm -f /swapfile
+sudo sed -i '/\/swapfile/d' /etc/fstab
+```
 
 # oracle
 

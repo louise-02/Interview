@@ -140,8 +140,10 @@ done
 ```
 
 ```bash
+# 下载 rsync
+yum install -y rsync
 # 对脚本授权
-chmod +755 xsync
+chmod +755 /usr/bin/xsync
 
 # 进行集群分发
 xsync module/kafka/
