@@ -215,16 +215,18 @@ File - Settings - Plugins
 
 # 7、常用插件
 
-| 插件名                    | 用途                             |
-| ------------------------- | -------------------------------- |
-| .ignore                   | 生成 .ignore 文件                |
-| Easy Javadoc              | 生成注释                         |
-| IDE Eval Reset            | idea 破解                        |
-| Maven Helper              |                                  |
-| MybatisX                  | xml识别，代码生成                |
-| Translation               | 翻译                             |
-| Easy Code                 | 代码生成                         |
-| RestfulTool               | 使用 ctrl + alt + / 快速定位接口 |
-| Activiti Bpmn visualizer  | 工作流                           |
-| jbl javatoweb             |                                  |
-| jclasslib Bytecode Viewer |                                  |
+| 插件名                          | 用途                             |
+| ------------------------------- | -------------------------------- |
+| .ignore                         | 生成 .ignore 文件                |
+| Easy Javadoc                    | 生成注释                         |
+| IDE Eval Reset                  | idea 破解                        |
+| Maven Helper                    |                                  |
+| MybatisX                        | xml识别，代码生成                |
+| Translation                     | 翻译                             |
+| Easy Code                       | 代码生成                         |
+| RestfulTool                     | 使用 ctrl + alt + / 快速定位接口 |
+| Activiti Bpmn visualizer        | 工作流                           |
+| jbl javatoweb                   |                                  |
+| jclasslib Bytecode Viewer       |                                  |
+| JTracker: MyBatis Log & JPA Log | sql日志                          |
+| python                          | python识别插件                   |
