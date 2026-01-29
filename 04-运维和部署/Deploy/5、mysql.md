@@ -88,7 +88,14 @@ vi /etc/yum.conf
 exclude=mysql*
 ```
 
-## 2、卸载
+## 2、离线安装
+
+```bash
+# 官方 MySQL RPM Bundle 下载页面
+https://dev.mysql.com/downloads/mysql/
+```
+
+## 3、卸载
 
 ```bash
 # 停止服务
@@ -149,10 +156,12 @@ FLUSH PRIVILEGES;
 | 📁 配置文件                   | `/etc/my.cnf`                              | MySQL 的主配置文件                         |
 | 📁 数据目录（首次启动后创建） | `/var/lib/mysql/`                          | 存放数据库数据、表、用户信息等             |
 | 📁 日志目录                   | `/var/log/mysqld.log`                      | MySQL 启动及运行日志（包括初始 root 密码） |
+| 📁 慢查询日志                 | `/var/log/mysql-slow.log`                  | 需配置 `slow_query_log=1`                  |
 | 📁 系统服务文件               | `/usr/lib/systemd/system/mysqld.service`   | 用于 systemd 启动 MySQL                    |
 | 📁 客户端工具                 | `/usr/bin/mysql`、`/usr/bin/mysqladmin` 等 | MySQL 客户端及管理工具                     |
 | 📁 库文件                     | `/usr/lib64/mysql/`                        | MySQL 相关动态库                           |
 | 📁 通用文件                   | `/usr/share/mysql/`                        | 包括错误信息、字符集、SQL 脚本等           |
+| 📁 PID文件                    | `/var/run/mysqld/mysqld.pid`               | 进程ID文件                                 |
 
 ## 3、配置文件
 

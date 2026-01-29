@@ -180,3 +180,61 @@ TRANSFORM=SEGMENT_ATTRIBUTES:N
 | `REMAP_TABLESPACE`    | 表空间映射     | `source_ts:target_ts`                                        |
 | `TRANSFORM`           | 对象转换       | `SEGMENT_ATTRIBUTES:N`(移除存储属性)                         |
 | `REMAP_TABLE`         | 表名映射       | `old_name:new_name`                                          |
+
+# 2、清除长时间占用锁脚本
+
+```sh
+#!/bin/bash
+
+# --- 1. 环境配置 ---
+export ORACLE_HOME=/u01/app/oracle/product/19.0.0.0
+export PATH=$PATH:$ORACLE_HOME/bin
+
+# --- 2. 数据库连接信息 ---
+DB_USER="YYCWMS"
+DB_PASS="yycwms"
+DB_CONN="172.23.0.40:1521/PDBORCL"
+WAIT_TIME=100
+
+# 日志文件路径
+LOG_FILE="/home/kill_lock.log"
+
+# --- 3. 执行逻辑 ---
+# 先将当前要处理的信息记录到日志
+sqlplus -S ${DB_USER}/${DB_PASS}@${DB_CONN} <<EOF
+set heading off feedback off pagesize 0 verify off echo off linesize 200
+spool /tmp/generated_kill.sql
+
+SELECT '--- [' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') || '] 发现阻塞者: SID=' || s.sid || ' Serial=' || s.serial# || ' 用户=' || s.username || ' 等待者已等了=' || round(v.wait_time_micro/1000000) || '秒'
+FROM v\$session s, v\$session v
+WHERE s.sid = v.blocking_session
+  AND v.wait_time_micro > $WAIT_TIME * 1000000
+  AND s.username = '${DB_USER}'
+  AND ROWNUM <= 1;
+
+-- 生成杀掉语句
+SELECT 'ALTER SYSTEM KILL SESSION ''' || s.sid || ',' || s.serial# || ''' IMMEDIATE;'
+FROM v\$session s
+WHERE s.username = '${DB_USER}'
+  AND s.blocking_session IS NULL
+  AND s.sid IN (
+      SELECT blocking_session
+      FROM v\$session
+      WHERE wait_time_micro > $WAIT_TIME * 1000000
+  );
+
+spool off
+-- 执行
+@/tmp/generated_kill.sql
+exit;
+EOF
+
+# 如果杀掉脚本里有内容，则将其追加到日志文件
+if [ -s /tmp/generated_kill.sql ]; then
+    cat /tmp/generated_kill.sql >> $LOG_FILE
+fi
+
+
+rm -f /tmp/generated_kill.sql
+```
+

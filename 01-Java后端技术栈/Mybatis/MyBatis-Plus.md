@@ -5,11 +5,11 @@
 **添加依赖**
 
 ```xml
-<dependency>
-    <groupId>com.baomidou</groupId>
-    <artifactId>mybatis-plus-boot-starter</artifactId>
-    <version>3.4.0</version>
-</dependency>
+  <dependency>
+      <groupId>com.baomidou</groupId>
+      <artifactId>mybatis-plus-boot-starter</artifactId>
+      <version>3.5.15</version>
+  </dependency>
 ```
 
 # 1、常用配置
@@ -335,9 +335,9 @@ mybatis-plus:
       update-strategy: NOT_NULL    # 更新策略
   configuration:
     map-underscore-to-camel-case: true  # 驼峰映射
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # SQL日志
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl  # SQL日志
   mapper-locations: classpath*:/mapper/**/*.xml  # XML位置
-  type-aliases-package: com.example.entity       # 实体类包
+  type-aliases-package: com.louise.entity       # 实体类包
 ```
 
 ## 2、配置类
@@ -374,7 +374,6 @@ public class MybatisPlusConfig {
             @Override
             public void insertFill(MetaObject metaObject) {
                 this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
-                this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
             }
             
             @Override
@@ -539,6 +538,17 @@ public Page<User> getUserByPage(int current, int size) {
 }
 ```
 
+依赖
+
+```xml
+3.5.9 PaginationInnerInterceptor 已分离出来。如需使用，则需单独引入 mybatis-plus-jsqlparser 依赖
+<dependency>
+    <groupId>com.baomidou</groupId>
+    <artifactId>mybatis-plus-jsqlparser-4.9</artifactId>
+    <version>3.5.15</version>
+</dependency>
+```
+
 ## 5、ActiveRecord 模式
 
 让实体类本身直接具备操作数据库的能力，适合简单的、单表操作较多的场景。
@@ -639,7 +649,6 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
     @Override
     public void insertFill(MetaObject metaObject) {
         this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
-        this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
     }
 
     @Override

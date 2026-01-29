@@ -36,6 +36,55 @@ remote repository：远程仓库
 - 当执行 **git checkout .** 或者 **git checkout -- < file>** 命令时，会用暂存区全部或指定的文件替换工作区的文件。这个操作很危险，会清除工作区中未添加到暂存区中的改动。
 - 当执行 **git checkout HEAD .** 或者 **git checkout HEAD < file>** 命令时，会用 HEAD 指向的 master 分支中的全部或者部分文件替换暂存区和以及工作区中的文件。这个命令也是极具危险性的，因为不但会清除工作区中未提交的改动，也会清除暂存区中未提交的改动。
 
+# 常用操作
+
+## 初始化仓库
+
+```
+创建文件夹并进入目录
+
+# 初始化
+git init
+# 建立远程仓库
+git remote add origin <url>
+# 拉取远程master到本地
+git pull origin master
+
+修改文件
+# 提交工作区代码到暂存区
+git add .
+# 提交暂存区代码到版本库
+git commit -m 'message'
+# 推送到远程 首次push需要加--set-upstream 与远程master分支建立关联
+git push --set-upstream origin master
+```
+
+## 强制拉取远程
+
+```
+//从远程仓库获取所有分支的更新，但不会自动合并或重置本地代码。
+git fetch --all
+//重置本地master分支到远程仓库的状态，这意味着本地所有未提交的更改都会被覆盖。
+git reset --hard origin/master
+//虽然在执行了上面的重置命令后不是必需的，但这个命令会再次更新代码，确保本地是最新的。
+git pull
+```
+
+# 常见问题
+
+```
+//The unauthenticated git protocol on port 9418 is no longer support
+//方案1 使用https:替换git
+git config --global url."https://".insteadOf git://
+//方案2 修改git://github.com/
+在 package.json 文件中找到 git:// 将其替换为 github：
+```
+
+```
+//SSL certificate problem: self signed certificate
+git config --global http.sslVerify false
+```
+
 # 创建仓库命令
 
 ## git init 初始化仓库
@@ -377,7 +426,7 @@ git push [remote] --tags
 
 # 撤销
 
-## git reset
+## git reset 回退已经commit的
 
 ```
 # 重置暂存区的指定文件，与上一次commit保持一致，但工作区不变
@@ -402,7 +451,7 @@ git reset --hard [commit]
 git reset --keep [commit]
 ```
 
-## git clean
+## git clean 删除没有add
 
 ```
 删除没有add的文件
@@ -420,22 +469,23 @@ git clean -f .
 git clean -df
 ```
 
-## git checkout
+## git checkout 回退没有commit
 
 ```
 回退没有commit的文件
 
-# 恢复暂存区的指定文件到工作区
+1. 恢复未提交的修改（针对工作区）
+# 丢弃工作区中指定文件的修改（恢复到暂存区或最新提交的状态）
 git checkout [file]
 git checkout -- [file]
+# 丢弃工作区中所有已跟踪文件的修改
 git checkout .
 
-# 恢复某个commit的指定文件到暂存区和工作区
+2. 恢复特定提交的文件（覆盖工作区和暂存区）
+# 将指定文件恢复到某个提交的状态（同时更新工作区和暂存区）
 git checkout [commit] [file]
+# 将所有文件恢复到某个提交的状态
 git checkout [commit] .
-
-# 恢复暂存区的所有文件到工作区
-git checkout .
 ```
 
 ## git revert
@@ -469,27 +519,6 @@ git fetch 也用于相同的目的，但它的工作方式略有不同。当你�
 
 `git pull = git fetch + git merge`
 
-# Git简易操作
-
-```
-创建文件夹并进入目录
-
-# 初始化
-git init
-# 建立远程仓库
-git remote add origin <url>
-# 拉取远程master到本地
-git pull origin master
-
-修改文件
-# 提交工作区代码到暂存区
-git add .
-# 提交暂存区代码到版本库
-git commit -m 'message'
-# 推送到远程 首次push需要加--set-upstream 与远程master分支建立关联
-git push --set-upstream origin master
-```
-
 # Git和SVN有什么区别？
 
 | GIT                                    | SVN                                |
@@ -501,14 +530,7 @@ git push --set-upstream origin master
 | Push/pull 操作更快                     | Push/pull 操作较慢                 |
 | 工程可以用 commit 自动共享             | 没有任何东西自动共享               |
 
-# 强制覆盖Git本地代码
 
-```
-//从远程仓库获取所有分支的更新，但不会自动合并或重置本地代码。
-git fetch --all
-//重置本地master分支到远程仓库的状态，这意味着本地所有未提交的更改都会被覆盖。
-git reset --hard origin/master
-//虽然在执行了上面的重置命令后不是必需的，但这个命令会再次更新代码，确保本地是最新的。
-git pull
-```
+
+
 

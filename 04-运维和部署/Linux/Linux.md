@@ -1130,6 +1130,17 @@ a = all (所有用户，即 u+g+o)
 | 时间戳转换 | `date -d @1640995200`           | 将时间戳转换为日期   |
 | 生成文件名 | `date +"backup-%Y%m%d.tar.gz"`  | 生成带时间戳的文件名 |
 
+### **查看系统位数**
+
+```bash
+uname -m
+uname -a
+```
+
 ### 查看系统版本
 
+```bash
 cat /etc/redhat-release
+cat /etc/system-release
+```
+
