@@ -93,6 +93,28 @@ exclude=mysql*
 ```bash
 # 官方 MySQL RPM Bundle 下载页面
 https://dev.mysql.com/downloads/mysql/
+
+# Red Hat Enterprise Linux 7 / Oracle Linux 7 (x86, 64-bit)
+
+# 解压 RPM Bundle
+tar -xvf mysql-8.0.45-1.el7.x86_64.rpm-bundle.tar
+
+# 安装顺序
+rpm -ivh \
+mysql-community-common-8.0.45-1.el7.x86_64.rpm \
+mysql-community-icu-data-files-8.0.45-1.el7.x86_64.rpm \
+mysql-community-libs-8.0.45-1.el7.x86_64.rpm \
+mysql-community-libs-compat-8.0.45-1.el7.x86_64.rpm \
+mysql-community-client-plugins-8.0.45-1.el7.x86_64.rpm \
+mysql-community-client-8.0.45-1.el7.x86_64.rpm \
+mysql-community-server-8.0.45-1.el7.x86_64.rpm
+
+
+yum localinstall -y *.rpm
+
+# 启动 MySQL
+systemctl enable mysqld
+systemctl start mysqld
 ```
 
 ## 3、卸载
@@ -171,7 +193,9 @@ FLUSH PRIVILEGES;
 chown -R mysql:mysql /data/mysql
 chmod 750 /data/mysql
 vi /etc/my.cnf
+```
 
+```bash
 [mysqld]
 # ======================================
 # 基础配置

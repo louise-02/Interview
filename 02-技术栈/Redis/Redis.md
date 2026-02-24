@@ -2565,7 +2565,7 @@ pom
 
 config
 
-```
+```java
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -2599,7 +2599,7 @@ public class RedisConfig {
 
 controller
 
-```
+```java
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -2619,7 +2619,7 @@ public class TestController {
 
 service
 
-```
+```java
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
@@ -2645,7 +2645,7 @@ public class TestService {
 
 yml
 
-```
+```yml
 spring:
   redis:
     password: 111111

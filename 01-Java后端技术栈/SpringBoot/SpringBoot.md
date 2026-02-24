@@ -1,49 +1,245 @@
+# 统一返回值
+
+```java
+import lombok.Data;
+
+import java.io.Serializable;
+
+@Data
+public class Result<T> implements Serializable {
+    private Integer code;
+    private String msg;
+    private T data;
+
+    private Result(Integer code, String msg, T data) {
+        this.code = code;
+        this.msg = msg;
+        this.data = data;
+    }
+
+    public static <T> Result<T> success(T data) {
+        return new Result<>(200, "success", data);
+    }
+
+    public static <T> Result<T> success() {
+        return success(null);
+    }
+
+    public static <T> Result<T> error(Integer code, String msg) {
+        return new Result<>(code, msg, null);
+    }
+
+    public static <T> Result<T> error(String msg) {
+        return error(500, msg);
+    }
+}
+```
+
 # 异常统一处理
+
+自定义异常
+
+```java
+import lombok.Getter;
+
+@Getter
+public class BusinessException extends RuntimeException {
+    private final Integer code;
+    private final String msg;
+
+    public BusinessException(Integer code, String msg) {
+        super(msg); // 把 msg 传给父类，打印堆栈时能看到具体错误
+        this.code = code;
+        this.msg = msg;
+    }
+}
+```
 
 @RestControllerAdvice + @ExceptionHandler
 
 ```java
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     /**
-     * 处理所有业务异常
+     * 拦截所有其他异常
      */
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, Object>> handleBusinessException(RuntimeException e) {
-        log.error("业务异常: {}", e.getMessage(), e);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 400);
-        result.put("message", e.getMessage());
-        result.put("success", false);
-        result.put("timestamp", System.currentTimeMillis());
-
-        return ResponseEntity.badRequest().body(result);
+    @ExceptionHandler(value = Exception.class)
+    public Result<?> exception(Exception e) {
+        log.error("Exception ：", e);
+        return Result.error("服务器异常，请联系管理员");
     }
 
     /**
-     * 处理所有其他异常（兜底）
+     * 拦截自定义异常
      */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleAllException(Exception e) {
-        log.error("系统异常: {}", e.getMessage(), e);
+    @ExceptionHandler(value = BusinessException.class)
+    public Result<?> businessException(BusinessException e) {
+        log.error("BusinessException ：", e);
+        return Result.error(e.getCode(), e.getMsg());
+    }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 500);
-        result.put("message", "系统繁忙，请稍后重试");
-        result.put("success", false);
-        result.put("timestamp", System.currentTimeMillis());
+    /**
+     * 拦截参数校验错误
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Result<?> handleValidationException(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getAllErrors().stream().map(ObjectError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+        log.error("MethodArgumentNotValidException ：{}", message);
+        return Result.error(400, message);
+    }
 
-        return ResponseEntity.status(500).body(result);
+    /**
+     * 拦截数据库唯一约束冲突（Unique Index）
+     */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public Result<?> handleDuplicateKeyException(DuplicateKeyException e) {
+        log.error("唯一索引冲突: ", e);
+        return Result.error(400, "该数据已存在，请勿重复操作");
+    }
+
+    /**
+     * 拦截所有数据库相关报错
+     */
+    @ExceptionHandler(DataAccessException.class)
+    public Result<?> handleDataAccessException(DataAccessException e) {
+        log.error("数据库操作异常: ", e);
+        return Result.error(500, "数据库服务繁忙");
+    }
+}
+
+```
+
+
+
+# 拦截器 HandlerInterceptor
+
+拦截器
+
+```java
+@Component
+public class MyInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 核心：请求到达 Controller 之前执行
+        // 用途：鉴权、限流、从 Header 解析用户信息并存入 ThreadLocal
+        // 返回：true 放行；false 拦截（请求在此终结）
+        return true;
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) {
+        // 核心：Controller 执行完，但视图还没渲染时执行
+        // 用途：对返回的 ModelAndView 进行统一处理（JSON 时代用得较少）
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+        // 核心：整个请求彻底结束（视图渲染完/响应已发出）后执行
+        // 用途：资源清理（ThreadLocal.remove()）、性能监控（计算耗时）、异常记录
+    }
+}
+```
+
+注册配置
+
+```java
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new MyInterceptor())
+                .addPathPatterns("/**")        // 指定拦截范围
+                .excludePathPatterns("/login"); // 指定放行路径
+    }
+}
+```
+
+
+
+# 参数解析器 ArgumentResolver
+
+参数解析器
+
+```java
+@Component
+public class MyParamResolver implements HandlerMethodArgumentResolver {
+
+    @Override
+    public boolean supportsParameter(MethodParameter parameter) {
+        // 核心：判断参数是否需要由我处理
+        // 常用：判断参数上是否有某个注解，或参数是否为某个特定类型
+        return parameter.hasParameterAnnotation(MyAnnotation.class);
+    }
+
+    @Override
+    public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
+                                  NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
+        // 核心：具体的转换逻辑
+        // 用途：解析 Token、解密参数、从数据库查出对象、聚合分页参数等
+        // 返回：返回的对象将直接赋值给 Controller 的形参
+        return "加工后的参数值";
+    }
+}
+```
+
+注册配置
+
+```java
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+        resolvers.add(new MyParamResolver());
+    }
+}
+```
+
+# 返回值解析器 ReturnValueHandler
+
+返回值解析器
+
+```java
+public class MyResultHandler implements HandlerMethodReturnValueHandler {
+
+    @Override
+    public boolean supportsReturnType(MethodParameter returnType) {
+        // 核心：判断返回类型是否由我处理
+        // 常用：判断返回对象类型，或类/方法上是否有特定注解
+        return !returnType.getParameterType().equals(Result.class);
+    }
+
+    @Override
+    public void handleReturnValue(Object returnValue, MethodParameter returnType,
+                                  ModelAndViewContainer mavContainer, NativeWebRequest webRequest) {
+        // 核心：处理返回值逻辑
+        // 用途：统一包装 Result 对象、数据加密后再输出、转换特定的响应格式
+        // 注意：如果要直接写出 JSON，需操作 HttpServletResponse 并标记请求已处理
+        mavContainer.setRequestHandled(true); 
+    }
+}
+```
+
+注册配置
+
+```java
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+    @Override
+    public void addReturnValueHandlers(List<HandlerMethodReturnValueHandler> handlers) {
+        handlers.add(new MyResultHandler());
     }
 }
 ```
@@ -160,7 +356,7 @@ xml
 修改 xml 增加 traceId
 
 ```xml
-    <!--日志格式应用spring boot默认的格式，也可以自己更改-->
+<!--日志格式应用spring boot默认的格式，也可以自己更改-->
 <!--    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>-->
     <conversionRule conversionWord="clr" converterClass="org.springframework.boot.logging.logback.ColorConverter" />
     <conversionRule conversionWord="wex" converterClass="org.springframework.boot.logging.logback.WhitespaceThrowableProxyConverter" />

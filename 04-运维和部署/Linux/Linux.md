@@ -121,6 +121,57 @@
 - 软链接是一个特殊的文件，它包含了指向另一个文件或目录的路径。
 - 在使用时，硬链接只能在同一个文件系统中创建，而软链接可以跨越不同的文件系统。
 
+# 常用操作
+
+## 部署 java 服务
+
+```bash
+# nohup：后台运行
+# > logs/xxx.log：输出重定向到文件
+# >>：追加到文件
+# >：覆盖到文件
+# > /dev/null：丢弃日志
+# 2>&1：将标准出错重定向到标准输出
+# &：后台运行
+
+# 部署服务并追加输出日志
+nohup java -jar xxx.jar > logs/baic-hgz.log 2>&1 &
+
+# 部署服务并覆盖输出日志
+nohup java -jar xxx.jar > logs/baic-hgz.log 2>&1 &
+
+# 丢弃日志 一般配置 logback 丢弃
+nohup java -jar xxx.jar > /dev/null 2>&1 &
+
+
+# 重启脚本
+ps -ef | grep xxx.jar | grep -v grep  | awk '{print $2;}' | xargs kill -9
+mv /usr/local/xxx/logs/xxx.log /usr/local/xxx/logs/xxx$(date +'%Y-%m-%d_%H-%M-%S').log
+nohup java -jar xxx.jar > /usr/local/xxx/logs/xxx.log 2>&1 &
+```
+
+## 查找正在运行的 Nginx
+
+```bash
+# 查看nginx的PID，以常用的80端口为例
+netstat -lntup|grep 80
+tcp 0 0 0.0.0.0:80 0.0.0.0:* LISTEN 13309/nginx
+# 可以知道nginx进程是13309
+
+# 通过相应的进程ID(比如：13309)查询当前运行的nginx路径
+ll /proc/13309/exe
+
+# 获取到nginx的执行路径后，使用-t参数即可获取该进程对应的配置文件路径
+/usr/local/nginx/sbin/nginx -t
+nginx: the configuration file /usr/local/nginx/conf/nginx.conf syntax is ok
+nginx: configuration file /usr/local/nginx/conf/nginx.conf test is successful
+
+# 查看位置
+whereis nginx
+```
+
+
+
 # Linux命令
 
 ## 磁盘管理
@@ -569,7 +620,7 @@ ll 是 ls -l 命令的别名
 | `-q`        | 不显示文件名头                     |
 | `-s <秒>`   | 与`-f`合用，指定监视间隔           |
 
-**实例**
+**示例**
 
 | 场景       | 命令                                                   | 说明                      |
 | :--------- | :----------------------------------------------------- | :------------------------ |
@@ -658,7 +709,7 @@ ll 是 ls -l 命令的别名
 | 场景       | 命令                           | 说明                           |
 | :--------- | :----------------------------- | :----------------------------- |
 | 搜索文本   | `grep 'error' log.txt`         | 在文件中搜索error              |
-| 忽略大小写 | `grep -i 'warning' *.log`      | 搜索warning（不区分大小写）    |
+| 忽略大小写 | `grep -i 'warning' *.log`      | 搜索 warning（不区分大小写）   |
 | 递归搜索   | `grep -r 'TODO' .`             | 递归搜索 TODO 当前目录所有文件 |
 | 显示行号   | `grep -n 'function' script.js` | 显示匹配行及行号               |
 | 管道搜索   | `ps aux | grep ssh`            | 结合管道过滤进程               |
@@ -953,6 +1004,8 @@ a = all (所有用户，即 u+g+o)
 
 **功能描述**：显示网络连接、路由表、接口统计等信息。
 
+安装：yum -y install net-tools
+
 **语法**
 
 `netstat [选项]`
@@ -1135,6 +1188,7 @@ a = all (所有用户，即 u+g+o)
 ```bash
 uname -m
 uname -a
+getconf LONG_BIT
 ```
 
 ### 查看系统版本
@@ -1142,5 +1196,43 @@ uname -a
 ```bash
 cat /etc/redhat-release
 cat /etc/system-release
+```
+
+### cpu 信息
+
+ cpu 详细信息
+
+```
+lscpu
+
+Architecture:          x86_64
+CPU op-mode(s):        32-bit, 64-bit
+Byte Order:            Little Endian
+CPU(s):                4		--cpu核心数
+On-line CPU(s) list:   0-3
+Thread(s) per core:    2
+Core(s) per socket:    2
+Socket(s)：                 1	--cpu个数
+NUMA 节点：         1
+厂商 ID：           GenuineIntel
+CPU 系列：          6
+型号：              85
+型号名称：        Intel(R) Xeon(R) Gold 6240R CPU @ 2.40GHz	 --cpu型号
+步进：              7
+CPU MHz：             2399.998
+BogoMIPS：            4799.99
+超管理器厂商：  KVM
+虚拟化类型：     完全
+L1d 缓存：          32K
+L1i 缓存：          32K
+L2 缓存：           4096K
+L3 缓存：           16384K
+NUMA 节点0 CPU：    0-3
+```
+
+cpu 核心数
+
+```
+nproc
 ```
 

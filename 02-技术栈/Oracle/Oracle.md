@@ -183,6 +183,8 @@ TRANSFORM=SEGMENT_ATTRIBUTES:N
 
 # 2、清除长时间占用锁脚本
 
+## v1
+
 ```sh
 #!/bin/bash
 
@@ -194,7 +196,7 @@ export PATH=$PATH:$ORACLE_HOME/bin
 DB_USER="YYCWMS"
 DB_PASS="yycwms"
 DB_CONN="172.23.0.40:1521/PDBORCL"
-WAIT_TIME=100
+WAIT_TIME=30
 
 # 日志文件路径
 LOG_FILE="/home/kill_lock.log"
@@ -205,7 +207,7 @@ sqlplus -S ${DB_USER}/${DB_PASS}@${DB_CONN} <<EOF
 set heading off feedback off pagesize 0 verify off echo off linesize 200
 spool /tmp/generated_kill.sql
 
-SELECT '--- [' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') || '] 发现阻塞者: SID=' || s.sid || ' Serial=' || s.serial# || ' 用户=' || s.username || ' 等待者已等了=' || round(v.wait_time_micro/1000000) || '秒'
+SELECT '--- [' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') || '] Found Blocker: SID=' || s.sid || ' Serial=' || s.serial# || ' User=' || s.username || ' Waiting_Time=' || round(v.wait_time_micro/1000000) || 's'
 FROM v\$session s, v\$session v
 WHERE s.sid = v.blocking_session
   AND v.wait_time_micro > $WAIT_TIME * 1000000
@@ -221,6 +223,64 @@ WHERE s.username = '${DB_USER}'
       SELECT blocking_session
       FROM v\$session
       WHERE wait_time_micro > $WAIT_TIME * 1000000
+  );
+
+spool off
+-- 执行
+@/tmp/generated_kill.sql
+exit;
+EOF
+
+# 如果杀掉脚本里有内容，则将其追加到日志文件
+if [ -s /tmp/generated_kill.sql ]; then
+    cat /tmp/generated_kill.sql >> $LOG_FILE
+fi
+
+
+rm -f /tmp/generated_kill.sql
+```
+
+## v2 优化了处理死锁
+
+```sh
+#!/bin/bash
+
+# --- 1. 环境配置 ---
+export ORACLE_HOME=/u01/app/oracle/product/19.0.0.0
+export PATH=$PATH:$ORACLE_HOME/bin
+
+# --- 2. 数据库连接信息 ---
+DB_USER="YYCWMS"
+DB_PASS="yycwms"
+DB_CONN="172.23.0.40:1521/PDBORCL"
+WAIT_TIME=30
+
+# 日志文件路径
+LOG_FILE="/home/kill_lock.log"
+
+# --- 3. 执行逻辑 ---
+# 先将当前要处理的信息记录到日志
+sqlplus -S ${DB_USER}/${DB_PASS}@${DB_CONN} <<EOF
+set heading off feedback off pagesize 0 verify off echo off linesize 200
+spool /tmp/generated_kill.sql
+
+SELECT '--- [' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') || '] Found Final Blocker: SID=' || s.sid || ' Serial=' || s.serial# || ' User=' || s.username || ' Max_Wait_Time=' || round(MAX(v.wait_time_micro)/1000000) || 's'
+FROM v\$session s, v\$session v
+WHERE s.sid = v.final_blocking_session
+  AND v.wait_time_micro > $WAIT_TIME * 1000000
+  AND s.username = '${DB_USER}'
+GROUP BY s.sid, s.serial#, s.username;
+
+  
+-- 生成杀掉语句 这能解决死锁环（A等B, B等A）导致 blocking_session 都不为 NULL 的情况
+SELECT 'ALTER SYSTEM KILL SESSION ''' || s.sid || ',' || s.serial# || ''' IMMEDIATE;'
+FROM v\$session s
+WHERE s.username = '${DB_USER}'
+  AND s.sid IN (
+      SELECT DISTINCT final_blocking_session 
+      FROM v\$session 
+      WHERE wait_time_micro > $WAIT_TIME * 1000000
+        AND final_blocking_session IS NOT NULL
   );
 
 spool off

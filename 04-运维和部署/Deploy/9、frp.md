@@ -15,6 +15,7 @@ releases 找到对应的 linux 版本和 windows 版本
 ```bash
 bindPort = 7000
 vhostHttpPort = 8080
+vhostHTTPSPort = 443
 subdomainHost = "116.198.24.98"
 
 webServer.addr = "0.0.0.0"
