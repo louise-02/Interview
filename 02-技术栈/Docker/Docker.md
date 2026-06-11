@@ -137,6 +137,14 @@ docker pull docker.1ms.run/mysql:8.0.32
 
 # 删除镜像
 docker rmi 镜像名称[:tag]
+
+# 镜像保存为本地文件
+docker save -o 文件名.tar 镜像名称
+docker save -o fastdfs.tar delron/fastdfs
+
+# 加载本地文件
+docker load -i 文件名.tar
+docker load -i fastdfs.tar
 ```
 
 ## 3.2、容器相关
@@ -336,4 +344,211 @@ Nacos started successfully in xxxx mode. use xxxx storage
 >
 > - hostname：使用主机名注册实例（推荐 Docker/K8s 环境）
 > - ip：使用容器的 IP 地址进行注册（不推荐容器中使用）
+
+​	
+
+# 5、Docker Image Build 镜像构建
+
+
+
+# 6、Docker Compose 编排
+
+```yml
+# =========================
+# 版本声明（新版已不强制）
+# =========================
+version: "3.9"   # 可选：3.7 / 3.8 / 3.9（推荐 3.8+）
+
+# =========================
+# 服务定义（核心）
+# =========================
+services:
+
+  # -------------------------
+  # 示例：Web 应用服务
+  # -------------------------
+  app:
+    container_name: my-app   # ❗指定容器名（不推荐多实例时使用）
+    
+    # ===== 镜像相关（二选一）=====
+    image: nginx:latest      # 方式1：直接使用镜像
+    # build:                  # 方式2：本地构建
+    #   context: .           # Dockerfile 所在目录
+    #   dockerfile: Dockerfile
+    #   args:                # 构建参数
+    #     VERSION: "1.0"
+
+    # ===== 端口映射 =====
+    ports:
+      - "8080:80"           # 宿主机:容器
+      # - "80:80"           # 可选多个端口
+
+    # ===== 环境变量 =====
+    environment:
+      - TZ=Asia/Shanghai
+      - APP_ENV=dev
+      # 也可以 map 形式
+      # DB_HOST: mysql
+
+    # 或者使用 env 文件（推荐）
+    # env_file:
+    #   - .env
+
+    # ===== 启动命令 =====
+    command: ["nginx", "-g", "daemon off;"]
+    # entrypoint: ["/bin/sh", "-c"]  # 会覆盖镜像默认入口（慎用）
+
+    # ===== 数据挂载 =====
+    volumes:
+      - ./html:/usr/share/nginx/html   # 本地目录挂载
+      - app-data:/data                 # 命名卷
+      # - /host/path:/container/path:ro  # 只读挂载（ro）
+
+    # ===== 网络 =====
+    networks:
+      - app-network
+
+    # ===== 依赖服务（启动顺序）=====
+    depends_on:
+      - mysql
+      # 注意：只控制启动顺序，不保证“已就绪”
+
+    # ===== 健康检查 =====
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s     # 检查间隔
+      timeout: 5s       # 超时
+      retries: 3        # 重试次数
+      start_period: 10s # 启动宽限期
+
+    # ===== 重启策略 =====
+    restart: always
+    # 可选：
+    # no               不重启
+    # always           总是重启
+    # on-failure       失败才重启
+    # unless-stopped   手动停止才不重启（常用）
+
+    # ===== 日志 =====
+    logging:
+      driver: "json-file"   # json-file / syslog / fluentd
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ===== 资源限制（Swarm 才完全生效）=====
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+    # ===== 访问控制 / 用户 =====
+    user: "1000:1000"  # 指定运行用户
+
+    # ===== tty / stdin =====
+    tty: true
+    stdin_open: true
+
+
+  # -------------------------
+  # MySQL 服务示例
+  # -------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: mysql8
+
+    ports:
+      - "3306:3306"
+
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: test
+      MYSQL_PASSWORD: test
+
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+    command:
+      # 多种启动参数示例
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+
+    restart: unless-stopped
+
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 5
+
+
+  # -------------------------
+  # Redis 示例
+  # -------------------------
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+    command: ["redis-server", "--appendonly", "yes"]
+
+    volumes:
+      - redis-data:/data
+
+    restart: always
+
+    networks:
+      - app-network
+
+
+# =========================
+# 网络定义
+# =========================
+networks:
+  app-network:
+    driver: bridge   # 可选：
+                     # bridge（默认）
+                     # host（共享宿主机网络）
+                     # none（无网络）
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16  # 自定义网段
+
+
+# =========================
+# 数据卷定义
+# =========================
+volumes:
+  mysql-data:
+    driver: local
+
+  redis-data:
+    driver: local
+
+  app-data:
+    driver: local
+
+
+# =========================
+# 配置（configs）——Swarm 用
+# =========================
+configs:
+  app_config:
+    file: ./config/app.yml
+
+
+# =========================
+# 密钥（secrets）——Swarm 用
+# =========================
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+```
 

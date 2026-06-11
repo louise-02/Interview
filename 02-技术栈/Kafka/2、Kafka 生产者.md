@@ -224,7 +224,7 @@ properties.put(ProducerConfig.PARTITIONER_CLASS_CONFIG,"kafka.MyPartition");
 
 
 
-# 4、生产经验 生产者如何提高吞吐量
+# 4、生产经验 | 生产者如何提高吞吐量
 
 ![image-20260313184144998](./pictures/image-20260313184144998.png)
 
@@ -262,7 +262,7 @@ public static void main(String[] args) {
 
 
 
-# 5、生产经验 数据可靠性
+# 5、生产经验 | 数据可靠性
 
 ## 1、ACK 应答原理
 
@@ -335,7 +335,7 @@ properties.put(ProducerConfig.RETRIES_CONFIG, 3);
 
 
 
-# 6、生产经验 数据去重
+# 6、生产经验 | 数据去重
 
 ## 1、数据传递语义
 
@@ -414,7 +414,7 @@ kafkaProducer.abortTransaction();
 
 
 
-# 7、生产经验 数据有序
+# 7、生产经验 | 数据有序
 
 ![image-20260313185444410](./pictures/image-20260313185444410.png)
 
@@ -422,7 +422,7 @@ kafkaProducer.abortTransaction();
 
 
 
-# 8、生产经验 数据乱序
+# 8、生产经验 | 数据乱序
 
 **kafka在1.x版本之前保证数据单分区有序，条件如下**
 
