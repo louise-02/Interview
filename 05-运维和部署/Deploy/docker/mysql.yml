@@ -1,0 +1,20 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "Aa123456..!"
+      TZ: Asia/Shanghai
+    volumes:
+      - /data/docker/mysql/conf:/etc/mysql/conf.d
+      - /data/docker/mysql/data:/var/lib/mysql
+      - /data/docker/mysql/logs:/var/log/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci --default-time-zone=+08:00
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

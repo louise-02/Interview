@@ -1,47 +1,47 @@
 # docker 安装
 
-## 1、更改镜像源
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
 
-创建或修改配置文件
-
-```bash
-sudo vi /etc/docker/daemon.json
-```
-
-添加国内镜像源地址
+## 1、创建目录
 
 ```bash
-{
-  "registry-mirrors": [
-    "https://registry.docker-cn.com",          // Docker 中国官方镜像（推荐）
-    "https://mirror.ccs.tencentyun.com",       // 腾讯云镜像
-    "https://docker.mirrors.ustc.edu.cn",      // 中科大镜像
-    "https://hub-mirror.c.163.com",            // 网易云镜像
-    "https://<你的ID>.mirror.aliyuncs.com"     // 阿里云镜像（需注册后获取）
-  ]
-}
+mkdir -p /data/docker/mysql/{conf,data,logs}
 ```
 
-重启 Docker 服务
-
-```
-sudo systemctl daemon-reload
-sudo systemctl restart docker
-```
-
-验证配置是否生效
+## 2、启动
 
 ```bash
-docker info
-
-Registry Mirrors:
-  https://registry.docker-cn.com/
-  https://mirror.ccs.tencentyun.com/
+cd /path/to/Deploy/docker
+docker compose -f mysql.yml up -d
 ```
 
-## 2、拉取镜像
+## 3、初始化
 
-## 3、启动
+```bash
+# 进入容器
+docker exec -it mysql mysql -uroot -p
+
+# 修改密码、远程访问（与 yum 安装相同）
+ALTER USER 'root'@'%' IDENTIFIED BY 'Aa123456..!';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+```
+
+## 4、自定义配置
+
+将配置文件放入 `/data/docker/mysql/conf/`，容器会自动加载：
+
+```bash
+vi /data/docker/mysql/conf/my.cnf
+```
+
+## 5、常用操作
+
+```bash
+docker compose -f docker/mysql.yml ps
+docker compose -f docker/mysql.yml logs -f
+docker compose -f docker/mysql.yml down
+```
 
 # yum 安装
 

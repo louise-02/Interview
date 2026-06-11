@@ -1,3 +1,31 @@
+# docker 安装
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+
+## 1、创建目录
+
+```bash
+mkdir -p /data/docker/rabbitmq/{data,logs}
+```
+
+## 2、启动
+
+```bash
+cd /path/to/Deploy/docker
+docker compose -f rabbitmq.yml up -d
+```
+
+## 3、访问管理界面
+
+浏览器访问 `http://宿主机IP:15672`，默认账号 `admin` / `Aa123456..!`（可在 compose 文件中修改）。
+
+## 4、创建应用用户
+
+```bash
+docker exec rabbitmq rabbitmqctl add_user VLMP VLMP_Aa123456
+docker exec rabbitmq rabbitmqctl set_permissions -p / VLMP ".*" ".*" ".*"
+```
+
 # Centos yum安装
 
 ## 1、安装前准备

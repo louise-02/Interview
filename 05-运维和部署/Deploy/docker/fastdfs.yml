@@ -1,0 +1,23 @@
+services:
+  fastdfs-tracker:
+    image: delron/fastdfs
+    container_name: fastdfs-tracker
+    restart: unless-stopped
+    command: tracker
+    network_mode: host
+    volumes:
+      - /data/docker/fastdfs/tracker:/var/fdfs
+
+  fastdfs-storage:
+    image: delron/fastdfs
+    container_name: fastdfs-storage
+    restart: unless-stopped
+    command: storage
+    network_mode: host
+    environment:
+      TRACKER_SERVER: 127.0.0.1:22122
+      GROUP_NAME: group1
+    volumes:
+      - /data/docker/fastdfs/storage:/var/fdfs
+    depends_on:
+      - fastdfs-tracker

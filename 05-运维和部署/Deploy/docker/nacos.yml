@@ -1,0 +1,24 @@
+services:
+  nacos:
+    image: nacos/nacos-server:v2.4.3
+    container_name: nacos
+    restart: unless-stopped
+    ports:
+      - "8848:8848"   # Web 控制台 + HTTP API
+      - "9848:9848"   # gRPC（Nacos 2.x 客户端通信）
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      SPRING_DATASOURCE_PLATFORM: derby
+      TZ: Asia/Shanghai
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+    volumes:
+      - /data/docker/nacos/logs:/home/nacos/logs
+      - /data/docker/nacos/data:/home/nacos/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s

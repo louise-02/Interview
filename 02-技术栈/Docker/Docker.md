@@ -1,554 +1,467 @@
 # 1、Docker 介绍
 
-官网地址：https://www.docker.com
+官网：https://www.docker.com
 
-Docker 可以让开发者打包他们的应用以及依赖包到一个轻量级、可移植的**容器**中，然后发布到任何流行的 Linux 机器上。
-
-容器是完全使用沙箱机制，相互隔离。
+Docker 将应用及其依赖打包到轻量、可移植的**容器**中，在任意支持 Docker 的 Linux 主机上运行。容器之间通过内核隔离机制相互独立。
 
 ![image-20250425093301603](pictures/image-20250425093301603.png)
 
-## 1.1、镜像 Image
+## 1.1、核心概念
 
-就是一个只读模板，比如：一个镜像可以包含一个完整的 CentOS，里面仅安装jdk或用户的其他应用。
+| 概念 | 说明 |
+| ---- | ---- |
+| 镜像 Image | 只读模板，类似「类」。例如 `mysql:8.0` 包含 MySQL 运行环境 |
+| 容器 Container | 镜像的运行实例，类似「对象」。可启动、停止、删除 |
+| 仓库 Registry | 存放镜像的场所，默认 [Docker Hub](https://hub.docker.com) |
+| 数据卷 Volume | 持久化数据，容器删除后数据仍保留在宿主机 |
+| 网络 Network | 容器间通信，同一网络内可通过服务名互访 |
 
-## 1.2、容器 Container
+## 1.2、与虚拟机的区别
 
-镜像和容器的关系，就像是面向对象程序设计中的类和对象一样。
+| | 虚拟机 | 容器 |
+| --- | --- | --- |
+| 隔离级别 | 硬件级，完整 OS | 进程级，共享宿主机内核 |
+| 启动速度 | 分钟级 | 秒级 |
+| 资源占用 | 大（每 VM 一套 OS） | 小（只跑应用进程） |
+| 镜像大小 | GB 级 | MB 级 |
 
-容器是从镜像创建的运行实例，它可以被启动、停止、 删除。
+# 2、安装与配置
 
-每个容器都是相互隔离的、保证安全的平台。
-
-可以把容器看做是一个简易版的 Linux 环境（包括 root 用户权限、进程空间、用户空间）和运行在其中的应用程序。
-
-## 1.3、仓库 Repository
-
-仓库是集中存放镜像文件的场所。
-
-# 2、Docker 安装
-
-## 2.1、安装
+## 2.1、CentOS 安装
 
 ```bash
-# 1、yum 包更新到最新 
-yum update
+# 安装依赖
+sudo yum install -y yum-utils device-mapper-persistent-data lvm2
 
-# 2、安装需要的软件包， yum-util 提供yum-config-manager功能，另外两个是devicemapper驱动依赖的 
-yum install -y yum-utils device-mapper-persistent-data lvm2
+# 添加仓库（任选其一）
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+# sudo yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 
-# 3、设置yum源
-yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo（中央仓库）
-yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo（阿里仓库）
-# 4、安装docker，出现输入的界面都按 y 
-yum install -y docker-ce
+# 安装（建议带上 compose 插件）
+sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# 5、查看docker版本，验证是否验证成功
+# 启动并设置开机自启
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# 验证
 docker -v
-
-# 6、启动docker环境
-systemctl start docker
-
-# 7、设置开机自启动
-systemctl enable docker
+docker compose version
 ```
 
-## 2.2、配置镜像加速器
+## 2.2、配置镜像加速
+
+配置后 `docker pull mysql:8.0` 会自动走加速器，**不需要**在 pull 时手动写镜像站地址。
 
 ```bash
-# 1、创建或修改文件
-vi /etc/docker/daemon.json
-
-# 2、添加以下内容
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
 {
- "registry-mirrors":["https://docker.1ms.run"]
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://mirror.ccs.tencentyun.com",
+    "https://docker.mirrors.ustc.edu.cn"
+  ]
 }
+EOF
 
-# 3、重启docker
-systemctl restart docker
-
-# 4、查看是否配置成功 Registry Mirrors
-docker info
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+docker info | grep -A 5 "Registry Mirrors"
 ```
 
-## 2.3、启停命令
+## 2.3、启停与卸载
 
 ```bash
-# 启动服务
-systemctl start docker 
-
-# 停止服务 
-systemctl stop docker
-
-# 重启服务	
-systemctl restart docker
-
-# 查看服务的状态	
-systemctl status docker 
-
-# 设置开机自启动 
-systemctl enable docker
+# 启停 Docker 守护进程（管理所有容器的服务）
+sudo systemctl start docker
+sudo systemctl stop docker
+sudo systemctl restart docker
+sudo systemctl status docker
 ```
 
-## 2.4、卸载
-
 ```bash
-# 停止 Docker 服务
+# 卸载
 sudo systemctl stop docker
 sudo systemctl disable docker
+sudo yum remove -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# 卸载 Docker 软件包
-sudo yum remove -y \
-    docker-ce \           # Docker 社区版主程序
-    docker-ce-cli \       # Docker 命令行工具
-    containerd.io \       # 容器运行时
-    docker-buildx-plugin  # Docker 多架构构建插件（如果存在）
-
-
-# 删除残留数据和配置文件
-镜像、容器、卷等数据默认存储在 /var/lib/docker
-sudo rm -rf /var/lib/docker     # Docker 主数据目录
-sudo rm -rf /var/lib/containerd # containerd 数据目录
-sudo rm -rf /etc/docker         # Docker 配置文件目录
-
-# 移除 Docker 官方仓库
+# 删除数据（会清除所有镜像、容器、卷）
+sudo rm -rf /var/lib/docker /var/lib/containerd /etc/docker
 sudo rm -f /etc/yum.repos.d/docker-ce.repo
 ```
 
+> 各中间件的 Docker 部署（目录规划、compose 文件）见 [Deploy/docker](../../05-运维和部署/Deploy/docker/0、目录规划.md)。
 
+# 3、常用命令
 
-# 3、Docker 命令
-
-## 3.1、镜像相关
+## 3.1、镜像
 
 ```bash
-# 查看本地镜像 
-docker images
+docker images                          # 查看本地镜像
+docker search mysql                    # 搜索 Docker Hub（不能搜第三方仓库）
 
-# 搜索镜像仓库，推荐：https://hub.docker.com/
-docker search 镜像名称
-# 搜索镜像仓库 指定镜像地址 镜像地址/镜像名称
-docker search docker.1ms.run/mysql
+# 拉取镜像（不指定架构，默认本机架构）
+docker pull mysql:8.0                  # 无 tag 默认 latest
+docker pull redis:7.2
 
-# 拉取镜像 没有tag默认latest
-docker pull 镜像名称[:tag]
-# 拉取镜像，指定镜像地址 镜像地址/镜像名称[:tag]
-docker pull docker.1ms.run/mysql:8.0.32
+# 拉取镜像（指定架构）
+docker pull --platform linux/amd64 mysql:8.0
+docker pull --platform linux/arm64 nginx:1.26
+docker inspect mysql:8.0 --format '{{.Os}}/{{.Architecture}}'   # 查看镜像架构
+
+docker tag mysql:8.0 my-mysql:8.0      # 给镜像打新标签
+docker inspect mysql:8.0               # 查看镜像详情
+
+# 离线传输
+docker save -o mysql-8.0.tar mysql:8.0
+docker load -i mysql-8.0.tar
 
 # 删除镜像
-docker rmi 镜像名称[:tag]
-
-# 镜像保存为本地文件
-docker save -o 文件名.tar 镜像名称
-docker save -o fastdfs.tar delron/fastdfs
-
-# 加载本地文件
-docker load -i 文件名.tar
-docker load -i fastdfs.tar
+docker rmi mysql:8.0                   # 按名称:标签删除
+docker rmi IMAGE_ID                    # 按镜像 ID 删除
+docker rmi -f mysql:8.0                # 强制删除
+docker image prune                     # 删除悬空镜像
+docker image prune -a                  # 删除所有未使用的镜像
+docker system df                       # 查看镜像占用空间
 ```
 
-## 3.2、容器相关
+## 3.2、容器
 
 ```bash
-# 查看本地容器
-docker ps 	  # 能查看正在运行
-docker ps -a  # 能查看所有的容器（运行的和停止的）
-docker ps -qa   # 只查询id
+docker ps              # 运行中的容器
+docker ps -a           # 所有容器
+docker ps -q           # 只显示容器 ID
 
-# 创建一个新的容器并运行（交互式）
-docker run -it --name=容器名 镜像名称 /bin/bash
-# 创建一个新的容器并运行（守护式）
-docker run -d --name=容器名 镜像名称
-# 进入容器内部
-docker exec -it 容器名称/容器id /bin/bash
+# 创建并运行
+docker run -d --name mysql -p 3306:3306 mysql:8.0          # 后台运行
+docker run -it --name test redis:7.2 /bin/bash              # 交互式（退出后容器停止）
 
-# 启动容器
-docker start 容器名称/容器id
+# 生命周期
+docker start mysql
+docker stop mysql
+docker restart mysql
+docker rm mysql                    # 删除已停止的容器
+docker rm -f mysql                 # 强制删除（运行中也删）
 
-# 停止容器
-docker stop 容器名称/容器id
-# 批量停止
-docker stop `docker ps -qa`
+# 进入容器 / 查看信息
+docker exec -it mysql bash         # 进入运行中的容器
+docker logs -f mysql               # 跟踪日志
+docker inspect mysql               # 查看容器详情（IP、挂载、环境变量等）
 
-# 删除容器
-docker rm 容器名称/容器id
-
-# 查看容器信息
-docker inspect 容器名称/容器id
-
-# 修改为开机自启
-docker update --restart=always 容器名称/容器id
-# 修改为非开机自启
-docker update --restart=no 容器名称/容器id
-# 批量设置开机自启
-docker update --restart=always $(docker ps -aq)
+# 重启策略
+docker update --restart=unless-stopped mysql
 ```
 
-# 4、Docker 应用部署
+### docker run 常用参数
 
-## 4.1、Redis
+| 参数 | 说明 | 示例 |
+| ---- | ---- | ---- |
+| `-d` | 后台运行 | `docker run -d ...` |
+| `--name` | 容器名称 | `--name mysql` |
+| `-p` | 端口映射 宿主机:容器 | `-p 3306:3306` |
+| `-v` | 目录挂载 宿主机:容器 | `-v /data/docker/mysql/data:/var/lib/mysql` |
+| `-e` | 环境变量 | `-e MYSQL_ROOT_PASSWORD=xxx` |
+| `--network` | 指定网络 | `--network host` |
+| `--restart` | 重启策略 | `--restart unless-stopped` |
+| `-m` / `--memory` | 内存限制 | `--memory 512m` |
+
+## 3.3、数据卷与网络
 
 ```bash
-# 搜索镜像
-docker search redis
-docker search docker.1ms.run/redis
+# 数据卷
+docker volume ls
+docker volume create my-vol
+docker volume rm my-vol
 
-# 拉取镜像
-docker pull redis:7.4.2
-# 拉取镜像 指定镜像源
-docker pull docker.1ms.run/redis:7.4.2
-
-# 指定镜像源修改镜像名
-docker tag docker.1ms.run/redis:7.4.2 redis:7.4.2
-docker rmi docker.1ms.run/redis:7.4.2
-
-# 简易版运行容器
-docker run -d \
-  --name redis7.4.2 \
-  -p 6379:6379 \
-  -v /opt/redis/data:/data \
-  redis:7.4.2 \
-  redis-server --appendonly yes
-
-# 运行容器 参数详情
-docker run -d \
-  --name redis7.4.2 \
-  -p 6379:6379 \
-  -v /opt/redis/data:/data \          # 持久化数据到宿主机
-  -v /opt/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf \  # 挂载自定义配置
-  --memory 512m \                    # 限制内存为 512MB
-  --memory-swap 1g \                 # 内存+Swap 总大小 1GB
-  --restart unless-stopped \         # 自动重启
-  redis:7.4.2 \                     # 使用最新版镜像
-  redis-server /usr/local/etc/redis/redis.conf # 指定配置文件
+# 网络
+docker network ls
+docker network create my-net
+docker network inspect bridge
 ```
 
-配置文件：/opt/redis/conf/redis.conf
+挂载方式对比：
+
+| 方式 | 写法 | 特点 |
+| ---- | ---- | ---- |
+| 绑定挂载 | `-v /data/docker/mysql/data:/var/lib/mysql` | 直接映射宿主机目录，**最常用** |
+| 命名卷 | `-v mysql-data:/var/lib/mysql` | Docker 管理存储路径，适合不关心具体路径的场景 |
+| 只读挂载 | `-v /path/conf:/etc/conf:ro` | 容器内不可写 |
+
+# 4、Docker Compose
+
+Compose 用 YAML 文件定义多容器应用，适合一键启停整套服务。
+
+> 新版命令是 `docker compose`（空格），不是旧版的 `docker-compose`（连字符）。两者功能相同，本文统一用 `docker compose`。
+
+## 4.1、常用命令
 
 ```bash
-# 设置访问密码
-requirepass your_secure_password_here
-
-# 其他配置（可选）
-bind 0.0.0.0
-protected-mode no
-appendonly yes
+docker compose -f mysql.yml up -d       # 后台启动
+docker compose -f mysql.yml down        # 停止并删除容器
+docker compose -f mysql.yml ps          # 查看状态
+docker compose -f mysql.yml logs -f     # 查看日志
+docker compose -f mysql.yml restart     # 重启所有服务
+docker compose -f mysql.yml pull       # 拉取镜像
 ```
 
-## 4.2、Mysql
+### 与 docker 命令的对应关系
 
-```bash
-# 搜索镜像
-docker search mysql
-docker search docker.1ms.run/mysql
+当 compose 文件中指定了 `container_name: mysql` 时：
 
-# 拉取镜像
-docker pull mysql:8.0.32
-# 拉取镜像 指定镜像源
-docker pull docker.1ms.run/mysql:8.0.32
+| compose 命令 | 等价的 docker 命令 | 是否完全等价 |
+| --- | --- | --- |
+| `docker compose logs -f mysql` | `docker logs -f mysql` | ✅ 看日志一样 |
+| `docker compose ps` | `docker ps` | 大致相同 |
+| `docker compose stop` | `docker stop mysql` | 停止效果一样 |
+| `docker compose down` | `docker stop` + `docker rm` | ❌ down 会**删除容器** |
 
-# 指定镜像源修改镜像名
-docker tag docker.1ms.run/mysql:8.0.32 mysql:8.0.32
-docker rmi docker.1ms.run/mysql:8.0.32
+日常查日志、进容器用 `docker logs` / `docker exec` 更简短；启停整套环境用 `docker compose`。
 
-# 简易版运行容器
-docker run -d \
-  --name mysql8.0.32 \
-  -p 3306:3306 \
-  -v /opt/mysql8.0.32/data:/var/lib/mysql \
-  -e MYSQL_ROOT_PASSWORD=123456 \
-  mysql:8.0.32 \
-  --character-set-server=utf8mb4 \
-  --collation-server=utf8mb4_unicode_ci
-  
-# 设置容器自启动
-docker update --restart=always mysql8.0.32
-  
-# 运行容器 参数详情
-docker run -d \
-  --name mysql8.0.32 \
-  -p 3306:3306 \                                          # 映射端口
-  -v /opt/mysql8.0.32/data:/var/lib/mysql \               # 持久化数据
-  -v /opt/mysql8.0.32/conf.d:/etc/mysql/conf.d \          # 自定义配置
-  -v /opt/mysql8.0.32/init:/docker-entrypoint-initdb.d \  # 初始化脚本
-  -e MYSQL_ROOT_PASSWORD=123456 \                         # root密码
-  -e MYSQL_DATABASE=mydb \                                # 初始数据库
-  -e MYSQL_USER=app_user \                                # 普通用户
-  -e MYSQL_PASSWORD=app_password \                        # 普通用户密码
-  -e TZ=Asia/Shanghai \                                   # 时区
-  mysql:8.0.32 \                                          # 指定镜像版本
-  --character-set-server=utf8mb4 \                        # 直接传递参数给mysqld
-  --collation-server=utf8mb4_unicode_ci
-```
-
-## 4.3、Nacos
-
-```bash
-# 下载 nacos-docker 项目
-git clone https://github.com/nacos-group/nacos-docker.git
-cd nacos-docker
-
-# 执行 docker-compose 命令启动Nacos 此启动方式会启动 grafana 和 prometheus
-docker-compose -f example/standalone-derby.yaml up
-
-# 编写简易版 example 中创建 docker-compose.yaml
-version: "3"
-services:
-  nacos:
-    image: nacos/nacos-server:${NACOS_VERSION} # version 也可手动指定 指的镜像版本
-    container_name: nacos-standalone
-    ports:
-      - "8848:8848"    # Nacos UI 端口
-      - "9848:9848"    # gRPC 通信端口（可选）
-      - "9849:9849"    # gRPC 通信端口（可选）
-    environment:
-      - MODE=standalone
-      - PREFER_HOST_MODE=hostname
-      - SPRING_DATASOURCE_PLATFORM=derby
-    restart: unless-stopped
-
-# 启动简易版
-docker-compose -f docker-compose.yaml up
-
-# 编写mysql版  example 中创建 docker-mysql-compose.yaml
-version: "3"
-services:
-  nacos:
-    image: nacos/nacos-server:${NACOS_VERSION} # version 也可手动指定 指的镜像版本
-    container_name: nacos-mysql
-    ports:
-      - "8848:8848"
-    environment:
-      - MODE=standalone
-      - PREFER_HOST_MODE=hostname
-      - SPRING_DATASOURCE_PLATFORM=mysql
-      - MYSQL_SERVICE_HOST=your-mysql-host
-      - MYSQL_SERVICE_DB_NAME=nacos_config
-      - MYSQL_SERVICE_PORT=3306
-      - MYSQL_SERVICE_USER=nacos
-      - MYSQL_SERVICE_PASSWORD=nacos123
-    restart: unless-stopped
-
-
-# 验证Nacos服务是否启动成功
-docker logs -f $container_id
-Nacos started successfully in xxxx mode. use xxxx storage
-```
-
-> SPRING_DATASOURCE_PLATFORM：持久化方式
->
-> - derby：使用内嵌数据库 Derby，适合开发或测试环境
-> - mysql：使用 MySQL，适合生产环境
->
-> PREFER_HOST_MODE：用于注册服务时确定节点自身的地址
->
-> - hostname：使用主机名注册实例（推荐 Docker/K8s 环境）
-> - ip：使用容器的 IP 地址进行注册（不推荐容器中使用）
-
-​	
-
-# 5、Docker Image Build 镜像构建
-
-
-
-# 6、Docker Compose 编排
+## 4.2、compose 文件模板
 
 ```yml
-# =========================
-# 版本声明（新版已不强制）
-# =========================
-version: "3.9"   # 可选：3.7 / 3.8 / 3.9（推荐 3.8+）
-
-# =========================
-# 服务定义（核心）
-# =========================
 services:
-
-  # -------------------------
-  # 示例：Web 应用服务
-  # -------------------------
   app:
-    container_name: my-app   # ❗指定容器名（不推荐多实例时使用）
-    
-    # ===== 镜像相关（二选一）=====
-    image: nginx:latest      # 方式1：直接使用镜像
-    # build:                  # 方式2：本地构建
-    #   context: .           # Dockerfile 所在目录
-    #   dockerfile: Dockerfile
-    #   args:                # 构建参数
-    #     VERSION: "1.0"
-
-    # ===== 端口映射 =====
+    image: nginx:1.26
+    container_name: my-nginx
     ports:
-      - "8080:80"           # 宿主机:容器
-      # - "80:80"           # 可选多个端口
-
-    # ===== 环境变量 =====
+      - "80:80"
     environment:
-      - TZ=Asia/Shanghai
-      - APP_ENV=dev
-      # 也可以 map 形式
-      # DB_HOST: mysql
-
-    # 或者使用 env 文件（推荐）
-    # env_file:
-    #   - .env
-
-    # ===== 启动命令 =====
-    command: ["nginx", "-g", "daemon off;"]
-    # entrypoint: ["/bin/sh", "-c"]  # 会覆盖镜像默认入口（慎用）
-
-    # ===== 数据挂载 =====
+      TZ: Asia/Shanghai
     volumes:
-      - ./html:/usr/share/nginx/html   # 本地目录挂载
-      - app-data:/data                 # 命名卷
-      # - /host/path:/container/path:ro  # 只读挂载（ro）
-
-    # ===== 网络 =====
+      - /data/docker/nginx/html:/usr/share/nginx/html    # 绑定挂载
+      - nginx-logs:/var/log/nginx                         # 命名卷
     networks:
-      - app-network
-
-    # ===== 依赖服务（启动顺序）=====
+      - app-net
     depends_on:
       - mysql
-      # 注意：只控制启动顺序，不保证“已就绪”
-
-    # ===== 健康检查 =====
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
-      interval: 30s     # 检查间隔
-      timeout: 5s       # 超时
-      retries: 3        # 重试次数
-      start_period: 10s # 启动宽限期
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
-    # ===== 重启策略 =====
-    restart: always
-    # 可选：
-    # no               不重启
-    # always           总是重启
-    # on-failure       失败才重启
-    # unless-stopped   手动停止才不重启（常用）
-
-    # ===== 日志 =====
-    logging:
-      driver: "json-file"   # json-file / syslog / fluentd
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-    # ===== 资源限制（Swarm 才完全生效）=====
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-        reservations:
-          cpus: "0.5"
-          memory: 256M
-
-    # ===== 访问控制 / 用户 =====
-    user: "1000:1000"  # 指定运行用户
-
-    # ===== tty / stdin =====
-    tty: true
-    stdin_open: true
-
-
-  # -------------------------
-  # MySQL 服务示例
-  # -------------------------
   mysql:
     image: mysql:8.0
-    container_name: mysql8
-
+    container_name: mysql
     ports:
       - "3306:3306"
-
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: testdb
-      MYSQL_USER: test
-      MYSQL_PASSWORD: test
-
+      MYSQL_ROOT_PASSWORD: "Aa123456..!"
     volumes:
-      - mysql-data:/var/lib/mysql
-
-    command:
-      # 多种启动参数示例
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_general_ci
-
+      - /data/docker/mysql/data:/var/lib/mysql
+    networks:
+      - app-net
     restart: unless-stopped
 
-    networks:
-      - app-network
-
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 10s
-      retries: 5
-
-
-  # -------------------------
-  # Redis 示例
-  # -------------------------
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-
-    command: ["redis-server", "--appendonly", "yes"]
-
-    volumes:
-      - redis-data:/data
-
-    restart: always
-
-    networks:
-      - app-network
-
-
-# =========================
-# 网络定义
-# =========================
 networks:
-  app-network:
-    driver: bridge   # 可选：
-                     # bridge（默认）
-                     # host（共享宿主机网络）
-                     # none（无网络）
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16  # 自定义网段
+  app-net:
+    driver: bridge
 
-
-# =========================
-# 数据卷定义
-# =========================
 volumes:
-  mysql-data:
-    driver: local
-
-  redis-data:
-    driver: local
-
-  app-data:
-    driver: local
-
-
-# =========================
-# 配置（configs）——Swarm 用
-# =========================
-configs:
-  app_config:
-    file: ./config/app.yml
-
-
-# =========================
-# 密钥（secrets）——Swarm 用
-# =========================
-secrets:
-  db_password:
-    file: ./secrets/db_password.txt
+  nginx-logs:
 ```
 
+### 关键字段说明
+
+| 字段 | 说明 |
+| ---- | ---- |
+| `image` | 使用的镜像 |
+| `build` | 从 Dockerfile 本地构建（与 `image` 二选一） |
+| `ports` | 端口映射，格式 `宿主机:容器` |
+| `environment` | 环境变量 |
+| `volumes` | 数据挂载 |
+| `networks` | 加入的网络，同网络容器可通过**服务名**互访 |
+| `depends_on` | 控制启动顺序（不保证对方已就绪） |
+| `restart` | `no` / `always` / `on-failure` / `unless-stopped` |
+| `healthcheck` | 健康检查，配合 `depends_on: condition: service_healthy` 使用 |
+| `network_mode: host` | 共享宿主机网络，不需要 `ports` 映射 |
+
+### 常见误区
+
+1. **`version` 字段已废弃**：Compose V2 不再需要写 `version: "3.9"`。
+2. **`deploy.resources` 在单机 compose 中不生效**：这是 Swarm 模式用的。单机限制资源用 `docker run -m 512m`，或在 compose 中用 `mem_limit: 512m`（部分版本支持）。
+3. **`depends_on` 只保证启动顺序**：MySQL 容器启动了不代表已 accept 连接，应用侧需要重试或配合 `healthcheck`。
+4. **同一 compose 网络内用服务名通信**：例如 `mysql` 服务可被 `app` 通过 `mysql:3306` 访问，不要用 `localhost`。
+
+# 5、Dockerfile 镜像构建
+
+## 5.1、基本结构
+
+```dockerfile
+# 基础镜像
+FROM openjdk:17-jdk-slim
+
+# 维护者信息（可选）
+LABEL maintainer="your@email.com"
+
+# 工作目录
+WORKDIR /app
+
+# 复制文件到镜像
+COPY target/app.jar app.jar
+
+# 暴露端口（文档作用，实际映射靠 -p）
+EXPOSE 8080
+
+# 启动命令
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+## 5.2、常用指令
+
+| 指令 | 说明 |
+| ---- | ---- |
+| `FROM` | 基础镜像，必须是第一条有效指令 |
+| `RUN` | 构建时执行命令（如 `RUN yum install -y xxx`） |
+| `COPY` | 复制宿主机文件到镜像 |
+| `ADD` | 类似 COPY，还支持解压 tar、下载 URL（推荐优先用 COPY） |
+| `WORKDIR` | 设置工作目录 |
+| `EXPOSE` | 声明端口 |
+| `ENV` | 设置环境变量 |
+| `CMD` | 默认启动命令，可被 `docker run` 参数覆盖 |
+| `ENTRYPOINT` | 入口命令，不易被覆盖 |
+
+`CMD` 与 `ENTRYPOINT` 区别：
+
+- `CMD`：默认行为，容易被 `docker run` 后面的命令替换
+- `ENTRYPOINT`：容器的主命令，适合固定启动方式
+
+## 5.3、构建与运行
+
+```bash
+# 构建镜像（-t 指定名称和标签，. 为构建上下文目录）
+docker build -t my-app:1.0 .
+
+# 查看构建历史
+docker history my-app:1.0
+
+# 运行
+docker run -d --name my-app -p 8080:8080 my-app:1.0
+```
+
+## 5.4、多阶段构建（减小镜像体积）
+
+```dockerfile
+# 阶段1：编译
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /build
+COPY pom.xml .
+COPY src ./src
+RUN mvn package -DskipTests
+
+# 阶段2：运行（只保留 jar，不含 Maven 和源码）
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY --from=builder /build/target/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+# 6、应用部署示例
+
+挂载目录统一使用 `/data/docker/<服务名>/`，与 yum/二进制安装的 `/data/<服务名>/<版本>/` 区分。
+
+完整 compose 文件见 [Deploy/docker](../../05-运维和部署/Deploy/docker/0、目录规划.md)。
+
+## 6.1、Redis
+
+```bash
+mkdir -p /data/docker/redis/{conf,data}
+
+# 拷贝默认配置后修改
+docker run --rm redis:7.2 cat /usr/local/etc/redis/redis.conf > /data/docker/redis/conf/redis.conf
+
+docker run -d \
+  --name redis \
+  -p 6379:6379 \
+  -v /data/docker/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf \
+  -v /data/docker/redis/data:/data \
+  --restart unless-stopped \
+  redis:7.2 \
+  redis-server /usr/local/etc/redis/redis.conf
+```
+
+或使用 compose：`docker compose -f docker/redis.yml up -d`
+
+## 6.2、MySQL
+
+```bash
+mkdir -p /data/docker/mysql/{conf,data,logs}
+
+docker run -d \
+  --name mysql \
+  -p 3306:3306 \
+  -v /data/docker/mysql/conf:/etc/mysql/conf.d \
+  -v /data/docker/mysql/data:/var/lib/mysql \
+  -e MYSQL_ROOT_PASSWORD="Aa123456..!" \
+  -e TZ=Asia/Shanghai \
+  --restart unless-stopped \
+  mysql:8.0 \
+  --character-set-server=utf8mb4 \
+  --collation-server=utf8mb4_general_ci
+```
+
+或使用 compose：`docker compose -f docker/mysql.yml up -d`
+
+## 6.3、Nacos
+
+```bash
+mkdir -p /data/docker/nacos/{logs,data}
+docker compose -f docker/nacos.yml up -d
+```
+
+访问 `http://宿主机IP:8848/nacos`，默认账号 `nacos/nacos`。详细配置见 [16、nacos.md](../../05-运维和部署/Deploy/16、nacos.md)。
+
+# 7、常见问题
+
+## 7.1、容器启动后立即退出
+
+```bash
+docker logs 容器名    # 先看日志
+docker inspect 容器名  # 查看 ExitCode 和 Error
+```
+
+常见原因：前台进程结束（如没加 `-d` 时的交互式命令跑完）、启动命令错误、配置文件挂载路径不对。
+
+## 7.2、端口被占用
+
+```bash
+# 查看端口占用
+ss -tlnp | grep 3306
+# 或换宿主机端口
+-p 3307:3306
+```
+
+## 7.3、权限问题（挂载目录）
+
+容器内进程无权写宿主机目录时：
+
+```bash
+# 查看容器内运行用户
+docker exec mysql id
+
+# 调整宿主机目录权限
+sudo chown -R 999:999 /data/docker/mysql/data   # MySQL 容器内通常是 uid 999
+sudo chmod -R 755 /data/docker
+```
+
+## 7.4、磁盘空间不足
+
+```bash
+# 查看 Docker 占用
+docker system df
+
+# 清理未使用的镜像、容器、网络、构建缓存
+docker system prune -a       # 慎用，会删除所有未使用的镜像
+docker image prune         # 只清理悬空镜像
+```
+
+## 7.5、查看容器 IP
+
+```bash
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 容器名
+```
+
+同一 compose 网络内，推荐直接用**服务名**访问，不要硬编码 IP。

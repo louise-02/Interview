@@ -1,3 +1,31 @@
+# docker 安装
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+
+## 1、创建目录
+
+```bash
+mkdir -p /data/docker/nginx/{conf,conf.d,html,logs}
+```
+
+## 2、准备配置
+
+将 `nginx.conf` 放入 `/data/docker/nginx/conf/`，站点配置放入 `/data/docker/nginx/conf.d/`，静态文件放入 `/data/docker/nginx/html/`。
+
+## 3、启动
+
+```bash
+cd /path/to/Deploy/docker
+docker compose -f nginx.yml up -d
+```
+
+## 4、校验配置
+
+```bash
+docker exec nginx nginx -t
+docker exec nginx nginx -s reload
+```
+
 # yum 安装
 
 ## 1、安装

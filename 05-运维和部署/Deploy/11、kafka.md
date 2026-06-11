@@ -1,3 +1,34 @@
+# docker 安装
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+
+## 1、创建目录
+
+```bash
+mkdir -p /data/docker/zookeeper/{data,logs}
+mkdir -p /data/docker/kafka/data
+```
+
+## 2、启动
+
+```bash
+cd /path/to/Deploy/docker
+# 将 KAFKA_CFG_ADVERTISED_LISTENERS 中的「宿主机IP」改为实际 IP
+docker compose -f zookeeper-kafka.yml up -d
+```
+
+## 3、测试
+
+```bash
+# 创建 topic
+docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --create --topic test --partitions 1 --replication-factor 1
+
+# 查看 topic
+docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --list
+```
+
+Kafka UI 管理界面：`http://宿主机IP:8080`
+
 # Kafka 简介
 
 [Kafka官网](https://kafka.apache.org/downloads) 中选择 Binary download 获取包。

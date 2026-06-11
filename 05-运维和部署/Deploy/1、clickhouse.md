@@ -1,3 +1,31 @@
+# docker 安装
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+
+## 1、创建目录
+
+```bash
+mkdir -p /data/docker/clickhouse/{conf,data,logs}
+```
+
+## 2、启动
+
+```bash
+cd /path/to/Deploy/docker
+docker compose -f clickhouse.yml up -d
+```
+
+## 3、测试连接
+
+```bash
+docker exec -it clickhouse clickhouse-client
+SELECT 1;
+```
+
+## 4、自定义配置
+
+将 `config.xml`、`users.xml` 等放入 `/data/docker/clickhouse/conf/` 后重启容器。
+
 # yum 安装
 
 ## 1、安装

@@ -1,3 +1,31 @@
+# docker 安装
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+
+Zookeeper 与 Kafka、Kafka UI 在同一个 compose 文件中。
+
+## 1、创建目录
+
+```bash
+mkdir -p /data/docker/zookeeper/{data,logs}
+mkdir -p /data/docker/kafka/data
+```
+
+## 2、启动
+
+```bash
+cd /path/to/Deploy/docker
+# 修改 zookeeper-kafka.yml 中 KAFKA_CFG_ADVERTISED_LISTENERS 的宿主机IP
+docker compose -f zookeeper-kafka.yml up -d zookeeper
+```
+
+## 3、测试
+
+```bash
+docker exec -it zookeeper zkCli.sh
+ls /
+```
+
 # 二进制包安装
 
 ## 1、用户和目录创建

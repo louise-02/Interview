@@ -1,3 +1,35 @@
+# docker 安装
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+
+## 1、创建目录
+
+```bash
+mkdir -p /data/docker/redis/{conf,data}
+```
+
+## 2、准备配置
+
+```bash
+# 从镜像中拷贝默认配置再修改
+docker run --rm redis:7.2 cat /usr/local/etc/redis/redis.conf > /data/docker/redis/conf/redis.conf
+vi /data/docker/redis/conf/redis.conf
+# 修改 protected-mode no，注释 bind 127.0.0.1
+```
+
+## 3、启动
+
+```bash
+cd /path/to/Deploy/docker
+docker compose -f redis.yml up -d
+```
+
+## 4、测试
+
+```bash
+docker exec -it redis redis-cli ping
+```
+
 # yum 安装
 
 ## 1、安装
