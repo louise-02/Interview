@@ -1,6 +1,35 @@
-# docker 安装
+# MySQL 简介
 
-> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+[MySQL 官网](https://www.mysql.com) | [文档](https://dev.mysql.com/doc/)
+
+MySQL 是最常用的**开源关系型数据库**，适用于业务库、主从复制、读写分离等场景。
+
+| 功能 | 说明 |
+| ---- | ---- |
+| InnoDB | 默认存储引擎，支持事务 |
+| 主从复制 | 读写分离、高可用基础 |
+| 二进制日志 | 备份、增量同步、审计 |
+
+常用端口：
+
+| 端口 | 说明 |
+| ---- | ---- |
+| 3306 | 客户端连接 |
+
+## 部署方式推荐
+
+| 环境 | 推荐方式 | 说明 |
+| ---- | -------- | ---- |
+| **生产** | **yum** | 核心库建议原生安装，便于备份、主从与性能调优 |
+| 开发 / 测试 | Docker | 快速搭建，非核心业务库可用 |
+| 离线环境 | yum 离线 rpm 包 | 见下文离线安装章节 |
+
+---
+
+# docker 安装（MySQL 8.0）
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)  
+> 偏生产检查清单见 [docker/2、偏生产部署说明.md](./docker/2、偏生产部署说明.md)
 
 ## 1、创建目录
 
@@ -8,42 +37,43 @@
 mkdir -p /data/docker/mysql/{conf,data,logs}
 ```
 
-## 2、启动
+## 2、偏生产配置（挂载）
+
+开发测试可跳过，直接启动；偏生产建议挂载 `my.cnf`（**首次 `up` 前**复制并改内存参数）。
 
 ```bash
 cd /path/to/Deploy/docker
+cp conf/mysql/my.cnf /data/docker/mysql/conf/
+vi /data/docker/mysql/conf/my.cnf   # 按宿主机内存调整 innodb_buffer_pool_size
+```
+
+`innodb_buffer_pool_size`、慢日志、binlog 等说明见下文 [MySQL 配置与运维](#mysql-配置与运维)。容器内路径已在示例中写好（`log-error`、`slow_query_log_file` 指向 `/var/log/mysql/`）。
+
+同时修改 [docker/mysql.yml](./docker/mysql.yml) 中 `MYSQL_ROOT_PASSWORD`，勿用默认弱密码。
+
+## 3、启动
+
+```bash
 docker compose -f mysql.yml up -d
 ```
 
-## 3、初始化
+## 4、初始化
 
 ```bash
-# 进入容器
 docker exec -it mysql mysql -uroot -p
-
-# 修改密码、远程访问（与 yum 安装相同）
-ALTER USER 'root'@'%' IDENTIFIED BY 'Aa123456..!';
-GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
-FLUSH PRIVILEGES;
-```
-
-## 4、自定义配置
-
-将配置文件放入 `/data/docker/mysql/conf/`，容器会自动加载：
-
-```bash
-vi /data/docker/mysql/conf/my.cnf
+# 创建业务库独立账号，勿长期用 root；见配置与运维「初始化与账号」
 ```
 
 ## 5、常用操作
 
 ```bash
-docker compose -f docker/mysql.yml ps
-docker compose -f docker/mysql.yml logs -f
-docker compose -f docker/mysql.yml down
+docker compose -f mysql.yml ps
+docker compose -f mysql.yml logs -f
+docker compose -f mysql.yml restart
+docker compose -f mysql.yml down
 ```
 
-# yum 安装
+# yum 安装（MySQL 8.0.37 / 离线 8.0.45）
 
 ## 1、安装
 
@@ -139,38 +169,11 @@ sudo userdel -r mysql
 sudo groupdel mysql
 ```
 
-# mysql
+# MySQL 配置与运维
 
-## 1、数据库初始化
+安装完成后：查目录 → 改生产配置 → 初始化账号 → 备份巡检。Docker 安装的 `my.cnf` 放 `/data/docker/mysql/conf/`，可参考下文模板。
 
-修改密码，配置权限
-
-```sql
-# 获取默认 root 密码
-sudo grep 'temporary password' /var/log/mysqld.log
-# 登录
-mysql -uroot -p
-
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'Aa123456..!';
-
-use mysql;
-
-update user set host='%' where user='root';
-
-# 授权 root 拥有所有数据库的所有权限
-GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
-
-GRANT SYSTEM_USER ON *.* TO 'root'@'%';
-
-FLUSH PRIVILEGES;
-
-# 创建普通用户
-CREATE USER 'cermp'@'%' IDENTIFIED BY 'P5x@jN2qZ4wS6';
-GRANT ALL PRIVILEGES ON *.* TO 'cermp'@'%' WITH GRANT OPTION;
-FLUSH PRIVILEGES;
-```
-
-## 2、yum 安装目录
+## 1、安装目录
 
 | 类型                         | 路径                                       | 说明                                       |
 | ---------------------------- | ------------------------------------------ | ------------------------------------------ |
@@ -185,13 +188,24 @@ FLUSH PRIVILEGES;
 | 📁 通用文件                   | `/usr/share/mysql/`                        | 包括错误信息、字符集、SQL 脚本等           |
 | 📁 PID文件                    | `/var/run/mysqld/mysqld.pid`               | 进程ID文件                                 |
 
-## 3、配置文件
+## 2、生产配置
 
-以下为一台16G内存配置
+以下示例按 **16GB 物理内存、专用 MySQL 节点** 编写。各内存项占物理内存的**参考比例**：
+
+| 参数 | 建议占物理内存 | 16GB 示例 | 说明 |
+| ---- | -------------- | --------- | ---- |
+| `innodb_buffer_pool_size` | **60%～70%**（专用）；混部 **40%～50%** | `10G`（约 62%） | 最重要，缓存数据页与索引 |
+| `innodb_log_buffer_size` | **0.5%～1%** | `64M` | 写 redo 的内存缓冲 |
+| `tmp_table_size` + `max_heap_table_size` | 合计约 **2%** | 各 `128M` | 内存临时表上限（按会话） |
+| `sort_buffer_size` / `join_buffer_size` | 单连接固定值 | 各 `8M` | **注意**：理论峰值 ≈ `max_connections × (sort + join)`，500 连接约 8GB，勿盲目调大 |
+
+`innodb_log_file_size` 是**磁盘上** redo 文件大小（非 Buffer Pool），单文件常见 **512MB～1GB**，两组共约 1～2GB 磁盘即可。
 
 ```bash
 chown -R mysql:mysql /data/mysql
 chmod 750 /data/mysql
+sudo mkdir -p /var/log/mysql
+sudo chown -R mysql:mysql /var/log/mysql
 vi /etc/my.cnf
 ```
 
@@ -202,7 +216,7 @@ vi /etc/my.cnf
 # ======================================
 user = mysql
 port = 3306
-basedir = /usr/local/mysql
+basedir = /usr
 datadir = /data/mysql
 socket = /data/mysql/mysql.sock
 pid-file = /var/run/mysqld/mysqld.pid
@@ -258,8 +272,8 @@ server-id = 1
 log-bin = /var/log/mysql/mysql-bin
 # 行格式（推荐）
 binlog_format = row
-# 日志保留天数
-expire_logs_days = 7
+# 日志保留 7 天（MySQL 8.0 用 binlog_expire_logs_seconds，expire_logs_days 已废弃）
+binlog_expire_logs_seconds = 604800
 # 每次事务同步（主从一致性高）
 sync-binlog = 1
 
@@ -275,15 +289,21 @@ lower_case_table_names = 1
 # 内存相关配置（重点优化）
 # ======================================
 # InnoDB Buffer Pool：用于缓存表数据和索引（最重要参数）
-innodb_buffer_pool_size = 10G # 建议为系统内存的 60~70%（16GB × 65% ≈ 10GB）
-# InnoDB Log：事务日志文件大小（单文件）
-innodb_log_file_size = 1G # 写入量大时建议不小于 512MB~1GB，建议占用内存 12% 左右
-innodb_log_files_in_group = 2 # 日志文件数量（共用2GB日志空间）
+# 建议为系统内存的 60~70%（16GB × 65% ≈ 10GB）
+innodb_buffer_pool_size = 10G
+# InnoDB Log：磁盘上的 redo 文件大小（单文件），非 Buffer Pool 内存
+# 写入量大时单文件 512MB～1GB，两组 innodb_log_files_in_group=2 共约 1～2GB 磁盘
+innodb_log_file_size = 1G
+# 日志文件数量（共用2GB日志空间）
+innodb_log_files_in_group = 2
 # Log Buffer：事务日志写入缓冲区
-innodb_log_buffer_size = 64M # 建议占用内存 0.5% 左右
+# 建议占用内存 0.5% 左右
+innodb_log_buffer_size = 64M
 # 控制写入性能与可靠性
-innodb_flush_log_at_trx_commit = 1 # 每次提交刷盘（事务安全）建议保留 1
-innodb_flush_method = O_DIRECT # 减少 double buffering 提升性能
+# 每次提交刷盘（事务安全）建议保留 1
+innodb_flush_log_at_trx_commit = 1
+# 减少 double buffering 提升性能
+innodb_flush_method = O_DIRECT
 # 每张表独立存储（推荐）
 innodb_file_per_table = 1
 
@@ -308,6 +328,75 @@ performance_schema = ON
 
 [client]
 socket=/data/mysql/mysql.sock
+```
+
+## 3、系统参数
+
+MySQL 连接数较高时需调大文件描述符，通用模板见 [0、readme.md](./0、readme.md#系统参数生产通用)。
+
+```bash
+# /etc/security/limits.conf
+mysql soft nofile 65536
+mysql hard nofile 65536
+
+# /usr/lib/systemd/system/mysqld.service 的 [Service] 段
+LimitNOFILE=65536
+```
+
+## 4、初始化与账号
+
+修改密码，配置权限：
+
+```sql
+# 获取默认 root 密码
+sudo grep 'temporary password' /var/log/mysqld.log
+# 登录
+mysql -uroot -p
+
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'Aa123456..!';
+
+use mysql;
+
+update user set host='%' where user='root';
+
+# 授权 root 拥有所有数据库的所有权限
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+
+GRANT SYSTEM_USER ON *.* TO 'root'@'%';
+
+FLUSH PRIVILEGES;
+
+# 创建普通用户
+CREATE USER 'cermp'@'%' IDENTIFIED BY 'P5x@jN2qZ4wS6';
+GRANT ALL PRIVILEGES ON *.* TO 'cermp'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+```
+
+生产环境建议业务库使用**独立账号 + 最小权限**，避免应用直连 root：
+
+```sql
+CREATE USER 'app_user'@'%' IDENTIFIED BY '强密码';
+GRANT SELECT, INSERT, UPDATE, DELETE ON your_db.* TO 'app_user'@'%';
+FLUSH PRIVILEGES;
+DELETE FROM mysql.user WHERE User='';
+DROP DATABASE IF EXISTS test;
+```
+
+## 5、备份与巡检
+
+```bash
+mysqldump -u root -p --single-transaction --routines --triggers your_db > /backup/your_db_$(date +%F).sql
+
+mysql -e "SHOW STATUS LIKE 'Threads_connected';"
+mysql -e "SHOW VARIABLES LIKE 'slow_query_log%';"
+mysql -e "SHOW REPLICA STATUS\G"   # 主从环境
+```
+
+## 6、防火墙
+
+```bash
+sudo firewall-cmd --permanent --add-port=3306/tcp
+sudo firewall-cmd --reload
 ```
 
 # 主从复制

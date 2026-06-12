@@ -1,32 +1,79 @@
-# docker 安装
+# RabbitMQ 简介
 
-> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+[RabbitMQ 官网](https://www.rabbitmq.com) | [文档](https://www.rabbitmq.com/docs)
+
+RabbitMQ 是基于 **AMQP 协议**的开源消息队列，支持多种消息模式（工作队列、发布订阅、路由、主题等）。
+
+| 功能 | 说明 |
+| ---- | ---- |
+| 消息队列 | 异步解耦、削峰填谷 |
+| 交换机 | direct / fanout / topic / headers |
+| 管理界面 | Web 控制台管理队列与用户 |
+
+常用端口：
+
+| 端口 | 说明 |
+| ---- | ---- |
+| 5672 | AMQP，应用程序连接 |
+| 15672 | Web 管理界面 |
+| 25672 | 集群节点间通信 |
+
+## 部署方式推荐
+
+| 环境 | 推荐方式 | 说明 |
+| ---- | -------- | ---- |
+| **生产** | **yum** | 官方 Erlang + RabbitMQ rpm，便于集群与调优 |
+| 小规模 / 开发 | Docker | 快速搭建，见 compose 文件 |
+
+---
+
+# docker 安装（RabbitMQ 3.13）
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)  
+> 偏生产检查清单见 [docker/2、偏生产部署说明.md](./docker/2、偏生产部署说明.md)
 
 ## 1、创建目录
 
 ```bash
-mkdir -p /data/docker/rabbitmq/{data,logs}
+mkdir -p /data/docker/rabbitmq/{conf,data,logs}
 ```
 
-## 2、启动
+## 2、偏生产配置（挂载 + 环境变量）
+
+**首次 `up` 前**复制配置并修改 compose 默认密码：
 
 ```bash
 cd /path/to/Deploy/docker
+cp conf/rabbitmq/rabbitmq.conf /data/docker/rabbitmq/conf/
+vi rabbitmq.yml   # 改 RABBITMQ_DEFAULT_USER / PASS
+```
+
+`vm.memory.high_watermark`、磁盘下限说明见下文 [RabbitMQ 配置与运维](#rabbitmq-配置与运维)。
+
+## 3、启动
+
+```bash
 docker compose -f rabbitmq.yml up -d
 ```
 
-## 3、访问管理界面
+## 4、访问与初始化
 
-浏览器访问 `http://宿主机IP:15672`，默认账号 `admin` / `Aa123456..!`（可在 compose 文件中修改）。
-
-## 4、创建应用用户
+浏览器访问 `http://宿主机IP:15672`，使用 compose 中配置的账号登录。
 
 ```bash
 docker exec rabbitmq rabbitmqctl add_user VLMP VLMP_Aa123456
 docker exec rabbitmq rabbitmqctl set_permissions -p / VLMP ".*" ".*" ".*"
+docker exec rabbitmq rabbitmqctl change_password admin '新强密码'
 ```
 
-# Centos yum安装
+## 5、运行检查
+
+```bash
+docker exec rabbitmq rabbitmqctl status
+docker exec rabbitmq rabbitmqctl list_queues
+```
+
+# Centos yum 安装（RabbitMQ 3.8.28 + Erlang 23.3.4）
 
 ## 1、安装前准备
 
@@ -140,7 +187,29 @@ sudo rabbitmqctl add_user VLMP VLMP_Aa123456
 sudo rabbitmqctl set_permissions -p / VLMP ".*" ".*" ".*"
 ```
 
-## 5、生产环境优化与配置
+# RabbitMQ 配置与运维
+
+## 1、系统参数
+
+Erlang 进程需调大文件描述符，通用模板见 [0、readme.md](./0、readme.md#系统参数生产通用)。
+
+```bash
+# /etc/security/limits.conf
+rabbitmq soft nofile 65536
+rabbitmq hard nofile 65536
+```
+
+## 2、生产配置
+
+RabbitMQ 默认使用 Erlang **内存高水位**限制：可用内存低于阈值时阻塞生产者。
+
+| 参数 | 建议 | 说明 |
+| ---- | ---- | ---- |
+| `vm_memory_high_watermark.relative` | **0.4～0.6**（默认 **0.4**） | 即 RabbitMQ 最多用**物理内存的 40%～60%** |
+| 专用节点 | **0.5～0.6** | 单机只跑 RabbitMQ 时可略高 |
+| 混部 | **0.4** 或更低 | 同机还有 Java、Redis 等 |
+
+示例：`vm.memory.high_watermark.relative = 0.5` 表示最多占用约一半物理内存。
 
 **配置文件**
 
@@ -153,12 +222,15 @@ sudo vim /etc/rabbitmq/rabbitmq.conf
 添加一些基本的生产配置
 
 ```bash
+# 内存高水位：最多占用物理内存的 50%（专用节点可用 0.5～0.6，混部用 0.4）
+vm.memory.high_watermark.relative = 0.5
+
 # 限制磁盘空闲空间低于 2GB 时触发警报并阻止生产者
 disk_free_limit.absolute = 2GB
 # 或者使用相对内存大小： disk_free_limit.relative = 2.0
 
-# 禁用 guest 用户，即使本地访问也不行（加强安全）
-loopback_users.guest = false
+# guest 仅允许本机登录（默认为 true；设为 false 反而允许远程 guest 登录，不安全）
+loopback_users.guest = true
 
 # 配置默认心跳时间（秒），建议与客户端设置一致
 heartbeat = 60
@@ -198,7 +270,7 @@ RabbitMQ 日志默认位于 `/var/log/rabbitmq/`。遇到问题时首先查看�
 tail -f /var/log/rabbitmq/rabbit@$(hostname).log
 ```
 
-## 6、验证
+## 3、验证与备份
 
 **检查服务状态**
 

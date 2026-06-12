@@ -20,9 +20,19 @@ Nacos 是阿里巴巴开源的**注册中心**和**配置中心**，Spring Cloud
 
 默认账号密码：`nacos` / `nacos`（**首次登录后请修改**）。
 
-# docker 安装
+## 部署方式推荐
 
-> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+| 环境 | 推荐方式 | 说明 |
+| ---- | -------- | ---- |
+| **生产** | **二进制 + MySQL** | 数据持久化、集群稳定；需 JDK 17+ |
+| 开发 / 测试 | Docker（Derby 内嵌库） | 单机快速体验，**不建议生产使用** |
+
+---
+
+# docker 安装（Nacos 2.4.3）
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)  
+> 偏生产说明见 [docker/2、偏生产部署说明.md](./docker/2、偏生产部署说明.md)
 
 ## 1、创建目录
 
@@ -30,34 +40,25 @@ Nacos 是阿里巴巴开源的**注册中心**和**配置中心**，Spring Cloud
 mkdir -p /data/docker/nacos/{logs,data}
 ```
 
-## 2、单机模式（Derby 内嵌库，开发测试）
+## 2、偏生产配置（环境变量 + MySQL）
 
-适合本地开发，数据存在容器挂载目录，**不建议生产使用**。
+| 模式 | 用途 | compose |
+| ---- | ---- | ------- |
+| Derby 单机 | 开发测试 | [nacos.yml](./docker/nacos.yml) |
+| **MySQL 持久化** | **偏生产 / Docker 推荐** | [nacos-mysql.yml](./docker/nacos-mysql.yml) |
+
+偏生产务必用 **MySQL 模式**，修改 [nacos-mysql.yml](./docker/nacos-mysql.yml) 中 `MYSQL_SERVICE_*`、`JVM_XMX`，并先在 MySQL 中建库导入 `mysql-schema.sql`（见下方 §3.1）。初始化、命名空间、备份见下文 [Nacos 配置与运维](#nacos-配置与运维)。
+
+## 3、单机模式（Derby，开发测试）
 
 ```bash
 cd /path/to/Deploy/docker
 docker compose -f nacos.yml up -d
 ```
 
-或使用 docker run：
+## 4、单机模式（MySQL，偏生产推荐）
 
-```bash
-docker run -d \
-  --name nacos \
-  -p 8848:8848 \
-  -p 9848:9848 \
-  -e MODE=standalone \
-  -e PREFER_HOST_MODE=hostname \
-  -e SPRING_DATASOURCE_PLATFORM=derby \
-  -v /data/docker/nacos/logs:/home/nacos/logs \
-  -v /data/docker/nacos/data:/home/nacos/data \
-  --restart unless-stopped \
-  nacos/nacos-server:v2.4.3
-```
-
-## 3、单机模式（MySQL 持久化，生产推荐）
-
-### 3.1、初始化 MySQL 数据库
+### 4.1、初始化 MySQL 数据库
 
 ```sql
 CREATE DATABASE nacos_config CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
@@ -79,7 +80,7 @@ wget https://raw.githubusercontent.com/alibaba/nacos/2.4.3/distribution/conf/mys
 mysql -unacos -p nacos_config < mysql-schema.sql
 ```
 
-### 3.2、启动
+### 4.2、启动
 
 修改 [docker/nacos-mysql.yml](./docker/nacos-mysql.yml) 中 `MYSQL_SERVICE_HOST` 为实际 MySQL 地址，然后：
 
@@ -88,7 +89,7 @@ cd /path/to/Deploy/docker
 docker compose -f nacos-mysql.yml up -d
 ```
 
-## 4、验证
+## 5、验证
 
 ```bash
 docker logs -f nacos
@@ -97,7 +98,7 @@ docker logs -f nacos
 
 浏览器访问 `http://宿主机IP:8848/nacos`，登录 `nacos/nacos`。
 
-## 5、Spring Cloud 接入
+## 6、Spring Cloud 接入
 
 `application.yml` 示例：
 
@@ -114,7 +115,7 @@ spring:
 
 Maven 依赖见 [Maven.md](../../02-技术栈/Maven/Maven.md) 中 Spring Cloud Alibaba 部分。
 
-## 6、常用操作
+## 7、常用操作
 
 ```bash
 docker compose -f docker/nacos.yml ps
@@ -123,9 +124,9 @@ docker compose -f docker/nacos.yml restart
 docker compose -f docker/nacos.yml down
 ```
 
-# 二进制包安装
+# 二进制包安装（Nacos 2.4.3）
 
-Nacos 2.x 需要 **JDK 17+**，参考 [4、jdk.md](./4、jdk.md)。
+Nacos 2.x 需要 **JDK 17+**，参考 [2、jdk.md](./2、jdk.md)。
 
 ## 1、用户和目录创建
 
@@ -262,7 +263,7 @@ export PATH=$PATH:$NACOS_HOME/bin
 source /etc/profile.d/nacos.sh
 ```
 
-# Nacos 配置
+# Nacos 配置与运维
 
 ## 1、二进制安装目录
 
@@ -304,7 +305,26 @@ sudo firewall-cmd --permanent --add-port=9848/tcp
 sudo firewall-cmd --reload
 ```
 
-## 5、常见问题
+## 5、初始化与备份
+
+```bash
+# 1. 修改默认 nacos/nacos 密码
+# 控制台 → 权限控制 → 用户列表
+
+# 2. 创建 prod 命名空间，迁移配置
+# 控制台 → 命名空间 → 新建 prod
+
+# 3. 备份 MySQL 中的 nacos 库
+mysqldump -u root -p nacos > /backup/nacos_$(date +%F).sql
+
+# 4. 健康检查
+curl http://127.0.0.1:8848/nacos/v1/console/health/readiness
+
+# 5. 集群模式检查各节点 logs/nacos.log
+tail -f /data/nacos/current/logs/nacos.log
+```
+
+## 6、常见问题
 
 **启动失败：Unable to find Java**
 

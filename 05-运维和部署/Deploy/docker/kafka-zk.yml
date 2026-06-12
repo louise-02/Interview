@@ -1,0 +1,16 @@
+services:
+  kafka:
+    image: bitnami/kafka:3.8
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      # Zookeeper 单独部署时填宿主机 IP（见 8、zookeeper.md）
+      KAFKA_CFG_ZOOKEEPER_CONNECT: 宿主机IP:2181
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://宿主机IP:9092
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      TZ: Asia/Shanghai
+    volumes:
+      - /data/docker/kafka/data:/bitnami/kafka/data

@@ -11,6 +11,7 @@ services:
       RABBITMQ_DEFAULT_PASS: "Aa123456..!"
       TZ: Asia/Shanghai
     volumes:
+      - /data/docker/rabbitmq/conf/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
       - /data/docker/rabbitmq/data:/var/lib/rabbitmq
       - /data/docker/rabbitmq/logs:/var/log/rabbitmq
     healthcheck:

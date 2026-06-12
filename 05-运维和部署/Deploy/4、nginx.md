@@ -1,6 +1,36 @@
-# docker 安装
+# Nginx 简介
 
-> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+[Nginx 官网](https://nginx.org) | [文档](https://nginx.org/en/docs/)
+
+Nginx 是高性能 **Web 服务器**和**反向代理**，常用于静态资源、负载均衡、HTTPS 终结、API 网关。
+
+| 功能 | 说明 |
+| ---- | ---- |
+| 反向代理 | 转发请求到后端应用 |
+| 负载均衡 | upstream 多节点分发 |
+| 静态资源 | 高效托管 HTML、JS、图片等 |
+
+常用端口：
+
+| 端口 | 说明 |
+| ---- | ---- |
+| 80 | HTTP |
+| 443 | HTTPS |
+
+## 部署方式推荐
+
+| 环境 | 推荐方式 | 说明 |
+| ---- | -------- | ---- |
+| **生产** | **yum 或编译** | 编译可自定义模块（SSL、stub_status 等） |
+| 容器化网关 | Docker | 团队已 Docker 化、作为入口代理时可选 |
+| 开发 / 测试 | Docker | 快速验证配置 |
+
+---
+
+# docker 安装（Nginx 1.26）
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)  
+> 偏生产检查清单见 [docker/2、偏生产部署说明.md](./docker/2、偏生产部署说明.md)
 
 ## 1、创建目录
 
@@ -8,14 +38,22 @@
 mkdir -p /data/docker/nginx/{conf,conf.d,html,logs}
 ```
 
-## 2、准备配置
+## 2、偏生产配置（挂载）
 
-将 `nginx.conf` 放入 `/data/docker/nginx/conf/`，站点配置放入 `/data/docker/nginx/conf.d/`，静态文件放入 `/data/docker/nginx/html/`。
+**首次 `up` 前**复制示例配置并改后端地址：
+
+```bash
+cd /path/to/Deploy/docker
+cp conf/nginx/nginx.conf /data/docker/nginx/conf/
+cp conf/nginx/conf.d/default.conf /data/docker/nginx/conf.d/
+vi /data/docker/nginx/conf.d/default.conf   # 改 upstream、server_name
+```
+
+HTTPS、gzip、`worker_connections` 等说明见下文 [Nginx 配置与运维](#nginx-配置与运维)。证书可放到 `/data/docker/nginx/conf/ssl/` 并在 `conf.d/` 增加 443 站点。
 
 ## 3、启动
 
 ```bash
-cd /path/to/Deploy/docker
 docker compose -f nginx.yml up -d
 ```
 
@@ -26,7 +64,7 @@ docker exec nginx nginx -t
 docker exec nginx nginx -s reload
 ```
 
-# yum 安装
+# yum 安装（Nginx 最新）
 
 ## 1、安装
 
@@ -91,7 +129,7 @@ sudo rm -rf /usr/share/nginx
 nginx -v
 ```
 
-# 编译 安装
+# 编译安装（Nginx 1.26.2）
 
 ## 1、安装库
 
@@ -169,10 +207,14 @@ vi /data/nginx/current/conf/nginx.conf
 
 ```bash
 # 全局配置块
-user  nginx;                      # 运行用户
-worker_processes  auto;           # 工作进程数 (auto=自动匹配CPU核心数)
-worker_rlimit_nofile 65535;       # 单个进程最大打开文件数(需要与系统 ulimit 设置匹配)
-pid run/nginx.pid;    # 进程PID文件
+# 运行用户
+user  nginx;
+# 工作进程数 (auto=自动匹配CPU核心数)
+worker_processes  auto;
+# 单个进程最大打开文件数(需要与系统 ulimit 设置匹配)
+worker_rlimit_nofile 65535;
+# 进程PID文件
+pid run/nginx.pid;
 
 events {
     # 使用 epoll 模型（Linux 下的高性能 IO 模型）
@@ -456,27 +498,169 @@ chmod +x /etc/profile.d/nginx.sh
 source /etc/profile.d/nginx.sh
 ```
 
-# nginx
+# Nginx 配置与运维
 
-## 1、yum 安装目录
+## 1、安装目录
 
 | 类型           | 路径                                    | 说明                                       |
 | -------------- | --------------------------------------- | ------------------------------------------ |
-| 📄 主程序       | `/usr/sbin/nginx`                       | Nginx 可执行文件                           |
+| 📄 主程序       | `/usr/sbin/nginx`                       | Nginx 可执行文件（yum）                    |
 | 📁 配置文件     | `/etc/nginx/`                           | 主配置目录，包含 `nginx.conf` 和 `conf.d/` |
-| 📁 默认网页     | `/usr/share/nginx/html/`                | 默认网页目录，含 `index.html` 等           |
-| 📁 服务控制脚本 | `/usr/lib/systemd/system/nginx.service` | 用于 systemd 管理 Nginx                    |
-| 📁 日志目录     | `/var/log/nginx/`                       | 存放访问日志和错误日志                     |
-| 📁 模块库       | `/usr/lib64/nginx/`                     | 一些动态模块（`.so` 文件）所在目录         |
-| 📁 缓存临时目录 | `/var/cache/nginx/`                     | Nginx 的临时缓存目录                       |
+| 📁 默认网页     | `/usr/share/nginx/html/`                | 默认网页目录                               |
+| 📁 日志目录     | `/var/log/nginx/`                       | 访问日志和错误日志（yum）                  |
+| 📄 主程序       | `/opt/nginx/current/sbin/nginx`         | 编译安装（软链接）                         |
+| 📁 配置文件     | `/data/nginx/current/conf/`             | 编译安装推荐数据目录分离                   |
 
-## 2、编译安装目录
+## 2、生产配置
 
-假设没有指定 `--prefix`，默认路径为 `/usr/local/nginx` 
+Nginx 内存与 **CPU 核数、连接数** 相关，一般不按物理内存百分比设固定值。
 
-| 类型       | 路径                               | 说明                                       |
-| ---------- | ---------------------------------- | ------------------------------------------ |
-| 📄 主程序   | `/usr/local/nginx/sbin/nginx`      | Nginx 可执行文件                           |
-| 📁 配置文件 | `/usr/local/nginx/conf/nginx.conf` | 主配置目录，包含 `nginx.conf` 和 `conf.d/` |
-| 📁 默认网页 | `/usr/local/nginx/html/`           | 默认网页目录，含 `index.html` 等           |
-| 📁 日志目录 | `/usr/local/nginx/logs/`           | 存放访问日志和错误日志                     |
+| 参数 | 建议 | 说明 |
+| ---- | ---- | ---- |
+| `worker_processes` | `auto` 或 **= CPU 核数** | 每 worker 独立进程 |
+| `worker_connections` | **1024～16384** / worker | 过高会占内存；需配合 `worker_rlimit_nofile` |
+| 理论最大连接 | `worker_processes × worker_connections` | 8 核 × 10240 ≈ 8 万（实际还受 `ulimit`、后端限制） |
+
+专用 Nginx 节点内存通常 **512MB～2GB** 足够；瓶颈多在连接数与磁盘 IO，不在堆内存。
+
+### HTTP 反向代理
+
+```nginx
+# nginx.conf 全局块
+# 按 CPU 核数自动设置 worker
+worker_processes auto;
+# 单 worker 最大打开文件数
+worker_rlimit_nofile 65535;
+
+events {
+    # 单 worker 最大并发连接
+    worker_connections 10240;
+    # Linux 高性能事件模型
+    use epoll;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    # 零拷贝发送静态文件
+    sendfile      on;
+    # 配合 sendfile 减少报文
+    tcp_nopush    on;
+    # 长连接超时（秒）
+    keepalive_timeout 65;
+    # 上传大小上限，按业务调整
+    client_max_body_size 50m;
+
+    # 隐藏响应头中的 Nginx 版本
+    server_tokens off;
+    # 开启 gzip 压缩
+    gzip on;
+    gzip_types text/plain application/json application/javascript text/css;
+
+    access_log  /data/nginx/current/logs/access.log;
+    error_log   /data/nginx/current/logs/error.log warn;
+
+    upstream backend {
+        server 127.0.0.1:8080;
+        # 与后端保持长连接，减少握手
+        keepalive 32;
+    }
+
+    server {
+        listen 80;
+        server_name example.com;
+
+        location / {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}
+```
+
+### HTTPS 完整示例（生产推荐）
+
+证书放到 `/data/nginx/current/conf/ssl/example.com/`，包含 `fullchain.pem`（证书链）和 `privkey.pem`（私钥）。
+
+```nginx
+# conf.d/example.com.conf 或写入 nginx.conf 的 http 块内
+
+# 1. HTTP 强制跳转 HTTPS
+server {
+    listen 80;
+    server_name example.com www.example.com;
+    return 301 https://$host$request_uri;
+}
+
+# 2. HTTPS 站点
+server {
+    listen 443 ssl http2;
+    server_name example.com www.example.com;
+
+    # 证书路径（Let's Encrypt 或自购证书）
+    ssl_certificate     /data/nginx/current/conf/ssl/example.com/fullchain.pem;
+    ssl_certificate_key /data/nginx/current/conf/ssl/example.com/privkey.pem;
+
+    # 会话缓存有效期
+    ssl_session_timeout 1d;
+    # 共享 SSL 会话缓存，减轻握手开销
+    ssl_session_cache shared:SSL:50m;
+    # 禁用不安全的 TLS 1.0/1.1
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers on;
+
+    # 可选：HSTS，浏览器后续只走 HTTPS（确认无误后再开）
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    location / {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # 告知后端当前是 HTTPS
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+```
+
+Let's Encrypt 自动续期示例：
+
+```bash
+# 安装 certbot 后（需 80 端口可访问）
+certbot certonly --nginx -d example.com -d www.example.com
+# 证书一般在 /etc/letsencrypt/live/example.com/，可复制或软链到 conf/ssl/
+nginx -t && systemctl reload nginx
+```
+
+## 3、系统参数
+
+高并发场景需同时调大 **Nginx 配置**（`worker_rlimit_nofile`）与 **系统 limits**，通用模板见 [0、readme.md](./0、readme.md#系统参数生产通用)。
+
+```bash
+# /etc/security/limits.conf
+nginx soft nofile 65535
+nginx hard nofile 65535
+
+# net.core.somaxconn 建议 65535（见 readme sysctl）
+```
+
+## 4、检查与防火墙
+
+```bash
+nginx -t
+systemctl status nginx
+curl -I http://127.0.0.1
+ss -lntp | grep nginx
+
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+
+# 日志轮转，避免 access.log 撑满磁盘
+vi /etc/logrotate.d/nginx
+```

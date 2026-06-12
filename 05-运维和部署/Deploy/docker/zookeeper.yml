@@ -1,0 +1,13 @@
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.8
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+      TZ: Asia/Shanghai
+    volumes:
+      - /data/docker/zookeeper/data:/bitnami/zookeeper/data
+      - /data/docker/zookeeper/logs:/bitnami/zookeeper/logs

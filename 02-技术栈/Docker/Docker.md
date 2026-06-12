@@ -412,7 +412,7 @@ mkdir -p /data/docker/nacos/{logs,data}
 docker compose -f docker/nacos.yml up -d
 ```
 
-访问 `http://宿主机IP:8848/nacos`，默认账号 `nacos/nacos`。详细配置见 [16、nacos.md](../../05-运维和部署/Deploy/16、nacos.md)。
+访问 `http://宿主机IP:8848/nacos`，默认账号 `nacos/nacos`。详细配置见 [13、nacos.md](../../05-运维和部署/Deploy/13、nacos.md)。
 
 # 7、常见问题
 

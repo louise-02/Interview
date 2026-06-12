@@ -1,4 +1,30 @@
-# 二进制包安装
+# Oracle Database 简介
+
+[Oracle 官网](https://www.oracle.com/database/) | [19c 下载](https://www.oracle.com/database/technologies/oracle19c-linux-downloads.html)
+
+Oracle Database 是商业**关系型数据库**，常用于企业核心系统、金融、政务等对稳定性与功能要求较高的场景。
+
+| 特点 | 说明 |
+| ---- | ---- |
+| 企业级 | 表空间、RAC、Data Guard 等高可用方案 |
+| 授权 | 需 Oracle 账号下载安装包，注意许可证 |
+| 资源占用 | 对内存、磁盘、内核参数有较高要求 |
+
+常用端口：
+
+| 端口 | 说明 |
+| ---- | ---- |
+| 1521 | 监听器，客户端连接 |
+
+## 部署方式推荐
+
+| 环境 | 推荐方式 | 说明 |
+| ---- | -------- | ---- |
+| **生产** | **二进制（唯一）** | 官方静默安装，无 Docker 官方镜像；授权与运维复杂，建议专用 DBA |
+
+---
+
+# 二进制包安装（Oracle 19c）
 
 ## 0、磁盘查看
 
@@ -94,9 +120,11 @@ fs.file-max = 6815744
 # Semaphore（信号量）
 kernel.sem = 250 32000 100 128
 
-# 共享内存（关键调整！）
-kernel.shmmax = 8589934592       # 8G（不超过物理内存的 50%）4294967296
-kernel.shmall = 2097152          # kernel.shmall/4096（page size） 
+# 共享内存上限（须 ≥ 后续 SGA，且不超过物理内存约 50%～60%）
+# 16GB 机器示例 8G：
+kernel.shmmax = 8589934592
+# shmmax / 4096（4KB 页大小）
+kernel.shmall = 2097152
 
 # 网络缓冲区
 net.core.rmem_default = 262144
@@ -595,9 +623,9 @@ sudo rm -f /swapfile
 sudo sed -i '/\/swapfile/d' /etc/fstab
 ```
 
-# oracle
+# Oracle 配置与运维
 
-## 1、二进制包 安装目录
+## 1、安装目录
 
 | 类型                   | 路径                                                     | 说明                                           | 来源                        |
 | ---------------------- | -------------------------------------------------------- | ---------------------------------------------- | --------------------------- |
@@ -685,3 +713,46 @@ ALTER USER VLMP QUOTA UNLIMITED ON VLMP; -- 用户在表空间 VLMP 上没有存
 > **UNLIMITED**：表示该用户在 `VLMP` 表空间中没有存储空间限制，即可以使用该表空间的所有可用空间。
 >
 > **ON VLMP**：表示这个设置是针对表空间 `VLMP` 的。
+
+## 4、系统参数
+
+Oracle 对共享内存、信号量、文件描述符要求较高，安装阶段见上文「安装前准备 → 内核参数与资源限制」。
+
+| 项 | 建议 | 说明 |
+| -- | ---- | ---- |
+| `kernel.shmmax` | ≥ SGA 大小，且 **≤ 物理内存的 50%～60%** | 小于 SGA 会报 ORA-27125 |
+| `kernel.shmall` | `shmmax / 4096`（4KB 页） | 与 shmmax 配套 |
+| SGA（`sga_target`） | 专用库 **40%～60%** 物理内存 | 混部酌减；PGA 另计 |
+| Swap | 建议 **8GB～16GB** 或物理内存 50%～100% | 安装文档 §4 有示例 |
+
+16GB 机器示例：`shmmax = 8589934592`（8GB）；32GB 机器：`shmmax = 17179869184`（16GB）。
+
+> `sysctl.conf` 中行尾不要写 `#` 注释，注释需单独成行，否则参数可能解析失败。
+
+## 5、日常启停
+
+```bash
+lsnrctl start | stop | status
+sqlplus / as sysdba
+# SHUTDOWN IMMEDIATE; / STARTUP;
+```
+
+## 6、备份
+
+```bash
+# RMAN 全量备份（按 DBA 规范调整）
+rman target /
+BACKUP DATABASE PLUS ARCHIVELOG;
+```
+
+## 7、巡检
+
+```sql
+SELECT tablespace_name, ROUND(used_percent, 2) FROM dba_tablespace_usage_metrics;
+```
+
+## 8、安全
+
+- 应用使用独立账号，最小权限
+- 1521 仅对应用网段开放
+- 补丁在测试环境验证后再上生产

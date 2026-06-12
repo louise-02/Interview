@@ -21,9 +21,21 @@ Portainer **仅支持 Docker 部署**，无独立二进制安装包。
 | 9443 | HTTPS Web 界面 |
 | 9001 | Agent 通信端口（多主机场景） |
 
-# docker 安装
+## 部署方式推荐
 
-> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+| 环境 | 推荐方式 | 说明 |
+| ---- | -------- | ---- |
+| **管理 Docker 环境** | **Docker**（唯一方式） | 管理面工具，非业务组件；按需部署 |
+| 多主机 | Docker + Agent | 见下文 Agent 章节 |
+
+> Portainer 无独立二进制包，仅用于可视化管理容器，不参与业务流量。
+
+---
+
+# docker 安装（Portainer CE 2.21.4）
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)  
+> 偏生产检查清单见 [docker/2、偏生产部署说明.md](./docker/2、偏生产部署说明.md)
 
 ## 1、创建目录
 
@@ -31,13 +43,17 @@ Portainer **仅支持 Docker 部署**，无独立二进制安装包。
 mkdir -p /data/docker/portainer/data
 ```
 
-## 2、拉取镜像
+## 2、偏生产说明
+
+无独立 `conf/` 文件。偏生产：**固定镜像 tag**、强 admin 密码、勿将 9000 暴露公网、定期备份 `data` 目录，见 [Portainer 配置与运维](#portainer-配置与运维) 与 [docker/2、偏生产部署说明.md](./docker/2、偏生产部署说明.md)。
+
+## 3、拉取镜像
 
 ```bash
 docker pull portainer/portainer-ce:2.21.4
 ```
 
-## 3、启动
+## 4、启动
 
 ```bash
 cd /path/to/Deploy/docker
@@ -58,7 +74,7 @@ docker run -d \
   portainer/portainer-ce:2.21.4
 ```
 
-## 4、离线传输镜像
+## 5、离线传输镜像
 
 ```bash
 # 有网机器
@@ -70,7 +86,7 @@ docker load -i portainer-ce-2.21.4.tar
 docker compose -f portainer.yml up -d
 ```
 
-## 5、初始化
+## 6、初始化
 
 浏览器访问 `http://宿主机IP:9000`（或 `https://宿主机IP:9443`）。
 
@@ -78,7 +94,7 @@ docker compose -f portainer.yml up -d
 2. 选择 **Get Started** → 连接本机 Docker（Local）
 3. 进入 Dashboard 即可管理当前主机上的容器
 
-## 6、常用命令
+## 7、常用命令
 
 ```bash
 docker compose -f docker/portainer.yml ps
@@ -89,7 +105,7 @@ docker compose -f docker/portainer.yml down
 
 > 注意：`down` 会删除 Portainer 容器，但 `/data/docker/portainer/data` 中的配置和数据会保留，重新 `up -d` 即可恢复。
 
-# 多主机管理（Agent）
+# 多主机管理（Agent 2.21.4）
 
 Portainer Server 管理本机；其他 Docker 主机部署 **Agent**，由 Server 统一纳管。
 
@@ -177,7 +193,7 @@ docker system df
 docker system prune -a    # 慎用，删除所有未使用的镜像
 ```
 
-# Portainer 配置
+# Portainer 配置与运维
 
 ## 1、目录说明
 
@@ -232,7 +248,21 @@ sudo firewall-cmd --reload
 | 日志 | Logs 页只看容器 stdout/stderr，应用写入文件的日志需在宿主机或 Console 中查看 |
 | 备份 | 定期备份 `/data/docker/portainer/data` |
 
-## 6、常见问题
+## 6、备份与升级
+
+```bash
+# 首次登录后立即修改 admin 密码
+# Settings → Authentication → Internal auth
+
+# 定期备份（含 endpoint、stack、用户配置）
+tar -czf /backup/portainer_$(date +%F).tar.gz /data/docker/portainer/data
+
+# 升级前备份再 pull 新镜像
+docker compose -f portainer.yml pull
+docker compose -f portainer.yml up -d
+```
+
+## 7、常见问题
 
 **页面无法访问**
 

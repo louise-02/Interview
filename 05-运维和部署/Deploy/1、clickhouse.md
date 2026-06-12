@@ -1,6 +1,35 @@
-# docker 安装
+# ClickHouse 简介
 
-> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)
+[ClickHouse 官网](https://clickhouse.com) | [文档](https://clickhouse.com/docs)
+
+ClickHouse 是面向**联机分析（OLAP）**的列式数据库，适合日志分析、报表统计、大数据聚合查询等高吞吐场景。
+
+| 功能 | 说明 |
+| ---- | ---- |
+| 列式存储 | 聚合查询性能高，压缩率好 |
+| 分布式表 | 支持集群分片与副本 |
+| SQL 接口 | 兼容大部分 SQL 语法 |
+
+常用端口：
+
+| 端口 | 说明 |
+| ---- | ---- |
+| 8123 | HTTP API |
+| 9000 | 原生 TCP 客户端 |
+
+## 部署方式推荐
+
+| 环境 | 推荐方式 | 说明 |
+| ---- | -------- | ---- |
+| **生产** | **yum** | 官方源安装，便于版本锁定与调优 |
+| 开发 / 测试 | Docker | 快速拉起，数据量小 |
+
+---
+
+# docker 安装（ClickHouse 25.3）
+
+> 公共步骤见 [docker/1、环境准备.md](./docker/1、环境准备.md)，挂载目录见 [docker/0、目录规划.md](./docker/0、目录规划.md)  
+> 偏生产检查清单见 [docker/2、偏生产部署说明.md](./docker/2、偏生产部署说明.md)
 
 ## 1、创建目录
 
@@ -8,25 +37,33 @@
 mkdir -p /data/docker/clickhouse/{conf,data,logs}
 ```
 
-## 2、启动
+## 2、偏生产配置（挂载）
+
+整目录挂载到 `/etc/clickhouse-server`。偏生产至少设置 default 用户强密码（**首次 `up` 前**）：
 
 ```bash
 cd /path/to/Deploy/docker
+mkdir -p /data/docker/clickhouse/conf/users.d
+cp conf/clickhouse/users.d/default-password.xml /data/docker/clickhouse/conf/users.d/
+vi /data/docker/clickhouse/conf/users.d/default-password.xml   # 改密码
+```
+
+内存比例、防火墙等见下文 [ClickHouse 配置与运维](#clickhouse-配置与运维) 第 7～10 节。
+
+## 3、启动
+
+```bash
 docker compose -f clickhouse.yml up -d
 ```
 
-## 3、测试连接
+## 4、测试连接
 
 ```bash
 docker exec -it clickhouse clickhouse-client
 SELECT 1;
 ```
 
-## 4、自定义配置
-
-将 `config.xml`、`users.xml` 等放入 `/data/docker/clickhouse/conf/` 后重启容器。
-
-# yum 安装
+# yum 安装（ClickHouse 25.3.3.42）
 
 ## 1、安装
 
@@ -121,7 +158,7 @@ sudo yum remove clickhouse-server clickhouse-client
 sudo rm -rf /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /etc/clickhouse-client
 ```
 
-# clickhouse
+# ClickHouse 配置与运维
 
 ## 1、yum 安装目录
 
@@ -712,3 +749,41 @@ SELECT count(*) FROM zd_lbs.你的大表名 LIMIT 1;
 SELECT count(*) FROM zd_cermp.你的大表名 LIMIT 1;
 ```
 
+## 7、初始化与账号
+
+```bash
+# 修改默认空密码
+clickhouse-client -q "ALTER USER default IDENTIFIED BY '强密码'"
+```
+
+## 8、巡检
+
+```bash
+clickhouse-client -q "SELECT version()"
+clickhouse-client -q "SELECT * FROM system.parts LIMIT 5"
+```
+
+## 9、防火墙
+
+```bash
+sudo firewall-cmd --permanent --add-port=8123/tcp
+sudo firewall-cmd --permanent --add-port=9000/tcp
+sudo firewall-cmd --reload
+```
+
+## 10、系统参数
+
+**内存**：ClickHouse 默认 `max_server_memory_usage` 约为物理内存的 **90%**（`0.9`）。专用 OLAP 节点可保持默认；与分析/其他服务混部时在 `config.xml` 或 `config.d/` 中调低，例如：
+
+```xml
+<!-- 专用节点可省略；混部时改为物理内存的 60%～70% -->
+<max_server_memory_usage_to_ram_ratio>0.7</max_server_memory_usage_to_ram_ratio>
+```
+
+**文件描述符**：高并发查询时建议调大，通用模板见 [0、readme.md](./0、readme.md#系统参数生产通用)。
+
+```bash
+# /etc/security/limits.conf
+clickhouse soft nofile 65536
+clickhouse hard nofile 65536
+```
