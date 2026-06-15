@@ -66,7 +66,7 @@ docker load -i fastdfs.tar
 ## 4、配置文件
 
 ```bash
-# tracker
+# tracker 修改 tracker_server
 docker exec -it fastdfs-tracker bash
 cat /etc/fdfs/client.conf
 

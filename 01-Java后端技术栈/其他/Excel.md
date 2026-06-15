@@ -503,3 +503,169 @@ private String status;
 
 
 
+# EasyPoi
+
+## 复杂表头导出
+
+![image-20260615161719197](./pictures/image-20260615161719197.png)
+
+```java
+List<ExcelExportEntity> colList = new ArrayList<>();
+ExcelExportEntity colEntity = new ExcelExportEntity("商品名称", "title");
+colEntity.setNeedMerge(true);
+colList.add(colEntity);
+
+colEntity = new ExcelExportEntity("供应商", "supplier");
+colEntity.setNeedMerge(true);
+colList.add(colEntity);
+
+
+ExcelExportEntity deliColGroup = new ExcelExportEntity("得力", "deli");
+List<ExcelExportEntity> deliColList = new ArrayList<ExcelExportEntity>();
+deliColList.add(new ExcelExportEntity("市场价", "orgPrice"));
+deliColList.add(new ExcelExportEntity("专区价", "salePrice"));
+deliColGroup.setList(deliColList);
+colList.add(deliColGroup);
+
+ExcelExportEntity jdColGroup = new ExcelExportEntity("京东", "jd");
+List<ExcelExportEntity> jdColList = new ArrayList<ExcelExportEntity>();
+jdColList.add(new ExcelExportEntity("市场价", "orgPrice"));
+jdColList.add(new ExcelExportEntity("专区价", "salePrice"));
+jdColGroup.setList(jdColList);
+colList.add(jdColGroup);
+
+List<Map<String, Object>> list = new ArrayList<>();
+
+for (int i = 0; i < 10; i++) {
+    Map<String, Object> valMap = new HashMap<>();
+    valMap.put("title", "名称." + i);
+    valMap.put("supplier", "供应商." + i);
+
+    List<Map<String, Object>> deliDetailList = new ArrayList<>();
+    for (int j = 0; j < 3; j++) {
+        Map<String, Object> deliValMap = new HashMap<>();
+        deliValMap.put("orgPrice", "得力.市场价." + j);
+        deliValMap.put("salePrice", "得力.专区价." + j);
+        deliDetailList.add(deliValMap);
+    }
+    valMap.put("deli", deliDetailList);
+
+    List<Map<String, Object>> jdDetailList = new ArrayList<>();
+    for (int j = 0; j < 2; j++) {
+        Map<String, Object> jdValMap = new HashMap<>();
+        jdValMap.put("orgPrice", "京东.市场价." + j);
+        jdValMap.put("salePrice", "京东.专区价." + j);
+        jdDetailList.add(jdValMap);
+    }
+    valMap.put("jd", jdDetailList);
+
+    list.add(valMap);
+}
+
+Workbook workbook = ExcelExportUtil.exportExcel(new ExportParams("价格分析表", "数据"), colList,
+        list);
+
+workbook.write(response.getOutputStream());
+```
+
+
+
+# 原生 poi
+
+## 复杂表头
+
+![image-20260615161748704](./pictures/image-20260615161748704.png)
+
+```java
+package other.excel;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.streaming.SXSSFCell;
+import org.apache.poi.xssf.streaming.SXSSFRow;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+
+/**
+ * ExcelExport
+ *
+ * @author louise
+ * @date 2023/9/15
+ */
+public class ExcelExport {
+    public static void main(String[] args) throws IOException {
+        SXSSFWorkbook wb = new SXSSFWorkbook();
+
+        CellStyle cellStyle = wb.createCellStyle();
+        //水平居中
+        cellStyle.setAlignment(HorizontalAlignment.CENTER);
+        //垂直居中
+        cellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        //设置边框
+        cellStyle.setBorderBottom(BorderStyle.THIN);
+        cellStyle.setBorderLeft(BorderStyle.THIN);
+        cellStyle.setBorderTop(BorderStyle.THIN);
+        cellStyle.setBorderRight(BorderStyle.THIN);
+        //设置背景色
+        cellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+
+        SXSSFSheet sheet = wb.createSheet("首页报表");
+
+        //合并第一行第一列-第二列
+//        sheet.addMergedRegion(new CellRangeAddress(0,0,0,1));
+        //合并第三列第一行-第二行
+//        sheet.addMergedRegion(new CellRangeAddress(0,1,2,2));
+
+        //冻结首行
+        //sheet.createFreezePane(0,1,0,1);
+        //冻结前两行
+        sheet.createFreezePane(0, 2, 0, 1);
+        SXSSFRow row = sheet.createRow(0);
+        SXSSFRow row1 = sheet.createRow(1);
+
+        String[] titleArr = {"物料编码", "物料名称", "车型", "总数量", "可用库存", "待拣货库存", "冻结库存", "不良品", "待检验", "是否专用件", "是否白名单"};
+        for (int i = 0; i < titleArr.length; i++) {
+            SXSSFCell cell = row.createCell(i);
+            SXSSFCell cell1 = row1.createCell(i);
+            cell.setCellValue(titleArr[i]);
+            sheet.setColumnWidth(i, 15 * 256);
+            cell1.setCellStyle(cellStyle);
+            sheet.addMergedRegion(new CellRangeAddress(0, 1, i, i));
+            cell.setCellStyle(cellStyle);
+        }
+
+        String[] inArr = {"2021", "2022", "2023"};
+        int start = titleArr.length;
+        SXSSFCell inCell = row.createCell(start);
+        inCell.setCellValue("入库明细");
+        inCell.setCellStyle(cellStyle);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, start, start + inArr.length - 1));
+        for (int i = 0; i < inArr.length; i++, start++) {
+            SXSSFCell cell = row1.createCell(start);
+            cell.setCellValue(inArr[i]);
+            sheet.setColumnWidth(start, 11 * 256);
+            cell.setCellStyle(cellStyle);
+        }
+
+        String[] outArr = {"2024", "2025", "2026"};
+        SXSSFCell outCell = row.createCell(start);
+        outCell.setCellValue("出库明细");
+        outCell.setCellStyle(cellStyle);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, start, start + outArr.length - 1));
+        for (int i = 0; i < inArr.length; i++, start++) {
+            SXSSFCell cell = row1.createCell(start);
+            cell.setCellValue(outArr[i]);
+            sheet.setColumnWidth(start, 11 * 256);
+            cell.setCellStyle(cellStyle);
+        }
+
+        wb.write(new FileOutputStream("C:\\Users\\Louise\\Desktop\\ces.xls"));
+    }
+}
+```
+

@@ -311,30 +311,13 @@ sudo -u kafka /opt/kafka/bin/kafka-storage.sh format \
 
 以三台节点为例，每台修改 `/opt/kafka/config/kraft/server.properties`（**完整生产项见下文 [KRaft 模式生产配置](#3kraft-模式生产配置)**）：
 
-```bash
-# 三台机器 node.id 依次为 1 2 3
-process.roles=broker,controller
-node.id=1
-controller.quorum.voters=1@192.168.1.101:9093,2@192.168.1.102:9093,3@192.168.1.103:9093
+每台仅改 **`node.id`** 和 **`advertised.listeners`**（其余三台相同）：
 
-listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-advertised.listeners=PLAINTEXT://192.168.1.101:9092
-controller.listener.names=CONTROLLER
-inter.broker.listener.name=PLAINTEXT
-listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-
-log.dirs=/data/kafka/data
-num.partitions=3
-log.retention.hours=168
-log.segment.bytes=1073741824
-log.retention.check.interval.ms=300000
-
-num.network.threads=3
-num.io.threads=8
-socket.send.buffer.bytes=102400
-socket.receive.buffer.bytes=102400
-socket.request.max.bytes=104857600
-```
+| 节点 | node.id | advertised.listeners |
+| ---- | ------- | -------------------- |
+| 192.168.1.101 | 1 | PLAINTEXT://192.168.1.101:9092 |
+| 192.168.1.102 | 2 | PLAINTEXT://192.168.1.102:9092 |
+| 192.168.1.103 | 3 | PLAINTEXT://192.168.1.103:9092 |
 
 > KRaft 模式**不需要** `zookeeper.connect` 和 `broker.id`，使用 `node.id` 代替。
 
@@ -434,88 +417,151 @@ vi /opt/kafka/bin/kafka-server-start.sh
 
 ## 2、ZK 模式生产配置
 
-文件：`/opt/kafka/config/server.properties`（三节点示例，仅维护旧集群时使用）
+文件：`/opt/kafka/config/server.properties`（三节点示例，与 [Kafka 简介](../../02-技术栈/Kafka/1、Kafka%20简介.md) 对齐；仅维护旧集群时使用）
 
 ```properties
-# --- 节点标识 ---
-# 每台唯一：1、2、3
+# ========== 节点标识（每台不同：1 / 2 / 3）==========
+# broker 的全局唯一编号，不能重复，只能是数字
 broker.id=1
 
-# --- 网络 ---
-# 处理请求的线程数
+# ========== 线程与网络 buffer ==========
+# 处理网络请求的线程数量
 num.network.threads=3
-# 磁盘 IO 线程数
+# 用来处理磁盘 IO 的线程数量
 num.io.threads=8
-listeners=PLAINTEXT://0.0.0.0:9092
-# 客户端实际连接的地址
-advertised.listeners=PLAINTEXT://192.168.1.101:9092
+# 发送套接字的缓冲区大小
+socket.send.buffer.bytes=102400
+# 接收套接字的缓冲区大小
+socket.receive.buffer.bytes=102400
+# 请求套接字的最大字节数（须大于 message.max.bytes）
+socket.request.max.bytes=104857600
 
-# --- 存储 ---
-# 消息数据目录，可挂载独立磁盘
+# ========== 数据目录 ==========
+# kafka 消息数据目录（与安装目录分离，建议挂载独立磁盘）
 log.dirs=/data/kafka/data
+# 用来恢复和清理 log.dirs 下数据的线程数量
+num.recovery.threads.per.data.dir=1
 
-# --- 副本与分区（生产三节点）---
-# 新 topic 默认分区数
+# ========== 三节点集群：副本与分区默认值 ==========
+# topic 手动创建时的默认分区数参考（按业务调整）
 num.partitions=3
-# 默认副本数
+# 业务 topic 默认副本数（三节点设为 3，须 ≤ broker 数）
 default.replication.factor=3
-# 最少同步副本，配合 acks=all
-min.insync.replicas=2
+# 内部 offset 主题 __consumer_offsets 的副本数
 offsets.topic.replication.factor=3
+# Kafka 事务内部 topic 的副本数
 transaction.state.log.replication.factor=3
+# 事务内部 topic 写入时至少几个 ISR 副本确认
 transaction.state.log.min.isr=2
+# Producer 设 acks=all 时，至少几个 ISR 副本写入才算成功（RF=3 时常用 2）
+min.insync.replicas=2
+# 是否允许非 ISR 副本在 Leader 故障后当选 Leader
+unclean.leader.election.enable=false
+# Broker 接受的单条消息最大字节数；Producer max.request.size 须 ≤ 此值
+message.max.bytes=10485760
+# Follower 从 Leader 拉取时的单次最大字节数；建议 ≥ message.max.bytes
+replica.fetch.max.bytes=10485760
 
-# --- 保留策略 ---
-# 消息保留 7 天
+# ========== 日志保留 ==========
+# segment 文件保留的最长时间（168=7 天）
 log.retention.hours=168
-# 单 segment 最大 1G
+# 每个 segment 文件的大小，默认最大 1G
 log.segment.bytes=1073741824
-# 禁止自动建 topic
+# 检查过期数据的时间间隔，默认 5 分钟检查一次
+log.retention.check.interval.ms=300000
+# 禁止访问不存在的 topic 时自动创建（须手动建 topic）
 auto.create.topics.enable=false
+# 允许删除 topic（配合 kafka-topics.sh --delete）
 delete.topic.enable=true
 
-# --- Zookeeper（ZK 模式专有）---
+# ========== 网络监听（每台 advertised 填本机 IP）==========
+# Broker 在本机绑定的监听地址
+listeners=PLAINTEXT://0.0.0.0:9092
+# 告诉客户端应连接的地址；每台填本机 IP
+advertised.listeners=PLAINTEXT://192.168.1.101:9092
+
+# ========== Zookeeper（三节点，ZK 模式专有）==========
+# 连接 Zookeeper 集群地址（chroot /kafka 方便管理）
 zookeeper.connect=192.168.1.101:2181,192.168.1.102:2181,192.168.1.103:2181/kafka
+# 连接 ZK 超时（ms）
 zookeeper.connection.timeout.ms=18000
 ```
 
 ## 3、KRaft 模式生产配置
 
-文件：`/opt/kafka/config/kraft/server.properties`（三节点示例，**新集群推荐**）
+文件：`/opt/kafka/config/kraft/server.properties`（三节点示例，**新集群推荐**；Broker 侧参数与 ZK 模式保持一致）
 
 ```properties
-# --- KRaft 角色（合并 broker+controller，小中集群常用）---
-# 本节点同时做 broker 和 controller
+# ========== KRaft 角色（合并 broker+controller，小中集群常用）==========
+# 本节点承担的角色：broker=处理消息读写；controller=管理元数据与选举；可写 broker,controller
 process.roles=broker,controller
-# 每台唯一：1、2、3（替代 broker.id）
+# 节点全局唯一编号（替代 ZK 模式的 broker.id）；三台分别为 1 / 2 / 3
 node.id=1
-# controller 选举 quorum，格式 nodeId@host:controllerPort
+# Controller 仲裁成员列表，格式 nodeId@host:controllerPort；三台都填相同内容
 controller.quorum.voters=1@192.168.1.101:9093,2@192.168.1.102:9093,3@192.168.1.103:9093
 
-# --- 监听（KRaft 比 ZK 多 9093）---
+# ========== 线程与网络 buffer ==========
+# 处理网络请求的线程数量
+num.network.threads=3
+# 用来处理磁盘 IO 的线程数量
+num.io.threads=8
+# 发送套接字的缓冲区大小
+socket.send.buffer.bytes=102400
+# 接收套接字的缓冲区大小
+socket.receive.buffer.bytes=102400
+# 请求套接字的最大字节数（须大于 message.max.bytes）
+socket.request.max.bytes=104857600
+
+# ========== 监听（KRaft 比 ZK 多 9093 Controller 端口）==========
+# PLAINTEXT=客户端/Broker 通信；CONTROLLER=Controller 节点间元数据通信
 listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+# 告诉客户端应连接的地址；每台填本机 IP（Controller 端口一般不对外暴露）
 advertised.listeners=PLAINTEXT://192.168.1.101:9092
+# 哪个 listener 名称用于 Controller 通信
 controller.listener.names=CONTROLLER
+# Broker 之间副本同步使用的 listener 名称
 inter.broker.listener.name=PLAINTEXT
+# listener 名称与安全协议的映射关系
 listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
 
-# --- 存储（与 ZK 模式相同路径规范，但不能混用同目录）---
+# ========== 数据目录 ==========
+# kafka 消息数据目录（与 ZK 模式路径相同，但不能混用同一目录数据）
 log.dirs=/data/kafka/data
+# 用来恢复和清理 log.dirs 下数据的线程数量
+num.recovery.threads.per.data.dir=1
 
-# --- 副本与分区 ---
-num.partitions=6
+# ========== 三节点集群：副本与分区默认值 ==========
+# topic 手动创建时的默认分区数参考（按业务调整）
+num.partitions=3
+# 业务 topic 默认副本数（三节点设为 3，须 ≤ broker 数）
 default.replication.factor=3
-min.insync.replicas=2
+# 内部 offset 主题 __consumer_offsets 的副本数
 offsets.topic.replication.factor=3
+# Kafka 事务内部 topic 的副本数
 transaction.state.log.replication.factor=3
+# 事务内部 topic 写入时至少几个 ISR 副本确认
 transaction.state.log.min.isr=2
+# Producer 设 acks=all 时，至少几个 ISR 副本写入才算成功（RF=3 时常用 2）
+min.insync.replicas=2
+# 是否允许非 ISR 副本在 Leader 故障后当选 Leader
+unclean.leader.election.enable=false
+# Broker 接受的单条消息最大字节数；Producer max.request.size 须 ≤ 此值
+message.max.bytes=10485760
+# Follower 从 Leader 拉取时的单次最大字节数；建议 ≥ message.max.bytes
+replica.fetch.max.bytes=10485760
 
-# --- 保留与 topic 管理 ---
+# ========== 日志保留 ==========
+# segment 文件保留的最长时间（168=7 天）
 log.retention.hours=168
-# -1 表示不按大小限制，仅按时间
+# 日志总大小上限；-1 表示不限制，仅按 log.retention.hours 删除
 log.retention.bytes=-1
+# 每个 segment 文件的大小，默认最大 1G
 log.segment.bytes=1073741824
+# 检查过期数据的时间间隔，默认 5 分钟检查一次
+log.retention.check.interval.ms=300000
+# 禁止访问不存在的 topic 时自动创建（须手动建 topic）
 auto.create.topics.enable=false
+# 允许删除 topic（配合 kafka-topics.sh --delete）
 delete.topic.enable=true
 
 # 注意：KRaft 模式无 zookeeper.connect、无 broker.id

@@ -151,6 +151,14 @@ docker inspect mysql               # 查看容器详情（IP、挂载、环境�
 
 # 重启策略
 docker update --restart=unless-stopped mysql
+
+# 查看各个容器运行状态
+docker stats
+
+# 全部暂停
+docker stop $(docker ps -q)
+# 全部删除
+docker rm $(docker ps -aq)
 ```
 
 ### docker run 常用参数

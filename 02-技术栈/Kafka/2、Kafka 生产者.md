@@ -64,6 +64,26 @@ RecordAccumulator 缓冲区总大小，默认 32m。
 
 生产者发送的所有数据的压缩方式。默认是 none，也就是不压缩。支持压缩类型：none、gzip、snappy、lz4 和 zstd。
 
+**delivery.timeout.ms**
+
+从消息 send 到最终成功或失败的总超时时间（**包含所有 retries**），超时后放弃并返回错误。默认 120000ms（2 分钟）。应大于 `request.timeout.ms` + 重试总耗时。
+
+**request.timeout.ms**
+
+Producer 等待 Broker **单次请求**响应的最长时间，默认 30000ms。网络抖动、Broker 慢时会触发超时并重试。
+
+**max.block.ms**
+
+当 metadata 不可用或 RecordAccumulator 缓冲区满时，**send() 阻塞的最长时间**，默认 60000ms。超时抛异常（常用于发现 topic 不存在、集群不可达）。
+
+**max.request.size**
+
+单个 Produce 请求的最大字节数，默认 1MB。**必须 ≤ Broker 的 message.max.bytes**，否则 Broker 拒收。
+
+**transactional.id**
+
+事务 Producer 的唯一标识；同一 transactional.id 同时只能有一个活跃实例。配合 `initTransactions()` 使用，用于跨分区原子写入或 Consume-Transform-Produce。
+
 
 
 # 2、异步发送Api

@@ -43,6 +43,33 @@ Topic: first1   Partition: 2    Leader: 1       Replicas: 1,3,2 Isr: 1,2
 ## 3、Broker 重要参数
 
 ```bash
+// ========== 可靠性（server.properties / 建 topic，见 6、丢消息与重复消费.md）==========
+
+//default.replication.factor
+新建 topic 时的默认副本数，默认 1。生产常用 3。
+
+//min.insync.replicas
+配合 Producer acks=all：ISR 中至少几个副本写入，Producer 才收到成功应答，默认 1。
+生产常用 2（RF=3 时允许 1 副本滞后）；若 ISR 存活数 < 此值，写入会报 NOT_ENOUGH_REPLICAS。
+
+//unclean.leader.election.enable
+Leader 故障时是否允许从非 ISR（落后过多）的 Follower 中选新 Leader，默认 false（Kafka 2.4+）。
+false：只从 ISR 选举，极端情况下分区暂时不可写，但不丢已 ack 数据；true：可能丢数据。
+
+//message.max.bytes
+Broker 接受的单条消息最大字节数，默认 1MB。Producer 的 max.request.size 不能超过它。
+
+//replica.fetch.max.bytes
+Follower 从 Leader 拉取数据时，单次 fetch 的最大字节数，默认 1MB。应 ≥ message.max.bytes。
+
+//offsets.topic.replication.factor
+内部主题 __consumer_offsets 的副本数，默认 1。生产建议 ≥ 3，否则 Broker 宕机可能丢 offset 元数据。
+
+//transaction.state.log.replication.factor
+事务相关内部 topic 的副本数，使用 Kafka 事务时建议 ≥ 3。
+
+// ========== ISR 与 Leader 平衡 ==========
+
 //replica.lag.time.max.ms
 ISR 中，如果 Follower 长时间未向 Leader 发送通信请求或同步数据，
 则该 Follower 将被踢出 ISR。该时间阈值，默认 30s。
@@ -225,7 +252,7 @@ bin/kafka-reassign-partitions.sh  --bootstrap-server hadoop102:9092
 
 Kafka 副本作用：提高数据可靠性。
 
-Kafka 默认副本 1 个，**生产环境一般配置为 2 个**，保证数据可靠性；太多副本会增加磁盘存储空间，增加网络上数据传输，降低效率。
+Kafka 默认副本 1 个，**生产环境一般 replication-factor=3，min.insync.replicas=2**，保证数据可靠性；太多副本会增加磁盘存储空间，增加网络上数据传输，降低效率。
 
 Kafka 中副本分为：Leader 和 Follower。Kafka 生产者只会把数据发往 Leader，然后 Follower 找 Leader 进行同步数据。
 
