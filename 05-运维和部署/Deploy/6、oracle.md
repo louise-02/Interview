@@ -642,7 +642,7 @@ sudo sed -i '/\/swapfile/d' /etc/fstab
 
 创建 VMLP 表空间
 
-```
+```bash
 CREATE TABLESPACE VLMP
 DATAFILE '/u02/oradata/ORCLCDB/vlmp01.dbf' SIZE 20G
 AUTOEXTEND ON NEXT 1G MAXSIZE 200G
@@ -656,7 +656,7 @@ ONLINE;
 >
 > 每次增加 1G 最大 200G
 
-```
+```bash
 CREATE TABLESPACE VLMP
 DATAFILE '/u02/oradata/ORCLCDB/vlmp01.dbf' SIZE 20G
 AUTOEXTEND ON NEXT 1G MAXSIZE UNLIMITED
@@ -687,20 +687,20 @@ ALTER USER VLMP DEFAULT TABLESPACE VLMP;
 授权
 
 ```sql
-GRANT 
-  CREATE SESSION,         -- 连接数据库
-  CREATE TABLE,           -- 创建表
-  CREATE VIEW,            -- 创建视图
-  CREATE SEQUENCE,        -- 创建序列
-  CREATE PROCEDURE,       -- 创建存储过程/函数
-  CREATE TRIGGER,         -- 创建触发器
-  CREATE TYPE,            -- 创建用户定义类型
-  CREATE SYNONYM          -- 创建同义词
-TO VLMP;
+GRANT CREATE SESSION,CREATE TABLE,CREATE VIEW,CREATE SEQUENCE,CREATE PROCEDURE,CREATE TRIGGER,CREATE TYPE,CREATE SYNONYM TO VLMP;
 
 # 授权所有权限
 GRANT ALL PRIVILEGES TO VLMP;
 ```
+
+>  CREATE SESSION,         -- 连接数据库
+>  CREATE TABLE,           -- 创建表
+>  CREATE VIEW,            -- 创建视图
+>  CREATE SEQUENCE,        -- 创建序列
+>  CREATE PROCEDURE,       -- 创建存储过程/函数
+>  CREATE TRIGGER,         -- 创建触发器
+>  CREATE TYPE,            -- 创建用户定义类型
+>  CREATE SYNONYM          -- 创建同义词
 
 授权对此表空间的所有权限
 
